@@ -24,6 +24,7 @@ interface University {
   name: string;
   country: string;
   domains: string[];           // email domains, e.g. ["unisg.ch"]
+  about: string | null;        // description of the university, useful for matching context
 }
 
 interface StudyProgram {
@@ -31,6 +32,7 @@ interface StudyProgram {
   name: string;                // e.g. "MSc Computer Science"
   degree: Degree;
   universityId: string;
+  about: string | null;        // description of the program, useful for matching context
 }
 
 interface Field {
@@ -69,6 +71,7 @@ interface Company {
   id: string;
   name: string;
   description: string;
+  about: string | null;        // longer context about thesis collaboration, useful for matching
   size: string;                // e.g. "1-50", "51-200", "1000+"
   domains: string[];           // industry sectors
 }
