@@ -30,6 +30,22 @@ Start with [`context/index.md`](context/index.md) for a map of what's available.
 | [`brand.md`](context/brand.md) | Voice, tone, design language, visual identity |
 | [`evidence.md`](context/evidence.md) | Research, hiring science, competitive landscape |
 
+## Brand & UI
+
+The `brand/` folder contains assets and references for building on-brand interfaces:
+
+Start with [`brand/README.md`](brand/README.md) for an overview, then grab what you need:
+
+| File | What's inside |
+|------|--------------|
+| [`setup.md`](brand/setup.md) | Tech stack, install commands, shadcn config |
+| [`colors.md`](brand/colors.md) | Copy-pasteable CSS variables (light + dark mode) |
+| [`typography.md`](brand/typography.md) | Font stack, type scale classes |
+| [`components.md`](brand/components.md) | Layout, components, icons, animation |
+| [`ai-integration.md`](brand/ai-integration.md) | Vercel AI SDK setup, AI visual style |
+| [`image-generation.md`](brand/image-generation.md) | Generate brand-consistent images with Gemini |
+| [`studyond.svg`](brand/studyond.svg) | Logo |
+
 ## Using the Context with AI Tools
 
 These files are designed to work as LLM context. Some ways to use them:
