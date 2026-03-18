@@ -18,3 +18,8 @@ node_modules/
 # Environment
 .env
 .env.local
+
+
+# direnv
+.envrc
+.direnv
