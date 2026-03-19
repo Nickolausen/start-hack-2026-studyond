@@ -6,7 +6,8 @@ const DEMO_STUDENT_ID = 'student-01';
 
 /**
  * On app mount: fetch the student profile + threads from MongoDB and hydrate
- * the Zustand store. Falls back to localStorage data if the API is unavailable.
+ * the Zustand store. The DB is the authoritative source of truth.
+ * Falls back silently to localStorage state if the API is unavailable.
  */
 export function useInitializeApp() {
   const { hydrateFromDB, profile } = useAppStore();
@@ -23,6 +24,8 @@ export function useInitializeApp() {
           fetchThreads(DEMO_STUDENT_ID),
         ]);
 
+        // Build the profile shape — display-only fields (university, studyProgram)
+        // are kept from the existing store since they're not in the DB schema directly.
         hydrateFromDB({
           profile: {
             id: student.id,
@@ -30,9 +33,8 @@ export function useInitializeApp() {
             lastName: student.lastName,
             email: student.email,
             degree: student.degree as 'bsc' | 'msc' | 'phd',
-            // Display-only fields — keep from existing store if not in DB
-            university: profile.university,
-            studyProgram: profile.studyProgram,
+            university: profile.university,       // display-only, from localStorage
+            studyProgram: profile.studyProgram,   // display-only, from localStorage
             studyProgramId: student.studyProgramId,
             universityId: student.universityId,
             skills: student.skills,
@@ -41,23 +43,15 @@ export function useInitializeApp() {
             objectives: student.objectives,
           },
           profileTags: student.aiTags.length > 0 ? student.aiTags : undefined,
-          savedThreads: threads.map((t) => ({
-            ...t,
-            // Ensure Date objects (JSON deserialization gives strings)
-            lastActivity: new Date(t.lastActivity),
-            closedAt: t.closedAt ? new Date(t.closedAt) : null,
-            messages: t.messages.map((m) => ({
-              ...m,
-              timestamp: new Date(m.timestamp),
-            })),
-          })),
-          roadmapSteps: student.roadmapSteps.map((s) => ({
-            ...s,
-            committedAt: s.committedAt ? new Date(s.committedAt) : null,
-          })),
+          // hydrateFromDB handles Date conversions, pass raw API data
+          savedThreads: threads as Parameters<typeof hydrateFromDB>[0]['savedThreads'],
+          roadmapSteps: student.roadmapSteps as Parameters<typeof hydrateFromDB>[0]['roadmapSteps'],
         });
 
-        console.log('[App] Hydrated from MongoDB');
+        console.log(
+          `[App] Hydrated from MongoDB — ${threads.length} thread(s), ` +
+          `${student.roadmapSteps.filter((s) => s.status === 'committed').length} step(s) committed`
+        );
       } catch (err) {
         console.warn('[App] Could not reach API, using localStorage state:', err);
       }

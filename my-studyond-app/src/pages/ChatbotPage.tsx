@@ -52,14 +52,14 @@ export function ChatbotPage() {
           </button>
         </div>
 
-        {!deckActive && (
+        {/* {!deckActive && (
           <button
             onClick={loadDemoMatches}
             className="ds-caption text-ai-solid hover:opacity-70 transition-opacity"
           >
             Load demo
           </button>
-        )}
+        )} */}
       </div>
 
       {/* Main layout */}
@@ -78,14 +78,14 @@ export function ChatbotPage() {
               <Sparkles className="size-3.5 text-white" />
             </div>
             <span className="ds-title-cards text-foreground">AI Thesis Advisor</span>
-            {!deckActive && (
+            {/* {!deckActive && (
               <button
                 onClick={loadDemoMatches}
                 className="ml-auto ds-caption text-ai-solid hover:opacity-70 transition-opacity"
               >
                 Load demo matches
               </button>
-            )}
+            )} */}
           </div>
           <div className="flex-1 min-h-0">
             <ChatInterface onMatchesReceived={handleMatchesReceived} />

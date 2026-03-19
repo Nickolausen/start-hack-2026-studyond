@@ -139,55 +139,44 @@ threadsRouter.patch('/:threadId/commit', async (req: Request, res: Response) => 
 });
 
 // PATCH /api/students/:studentId/threads/:threadId/uncommit
-// Cascade: also uncommits any threads committed AFTER this one
+// No cascade — only reverts this specific thread and its roadmap step.
 threadsRouter.patch('/:threadId/uncommit', async (req: Request, res: Response) => {
   const { studentId, threadId } = req.params;
 
   try {
     const thread = await Thread.findOne({ id: threadId, studentId }).lean();
     if (!thread) { res.status(404).json({ error: 'Thread not found' }); return; }
-    if (!thread.closedAt) {
-      // Not committed — nothing to do
-      res.json({ ok: true });
+
+    // Not committed — nothing to do
+    if (!thread.closedStepId) {
+      res.json({ ok: true, roadmapSteps: (await Student.findOne({ id: studentId }).lean())?.roadmapSteps });
       return;
     }
 
-    const closedAt = thread.closedAt;
+    const stepId = thread.closedStepId;
 
-    // Find all threads committed at or after this one (cascade)
-    const cascade = await Thread.find({
-      studentId,
-      closedAt: { $gte: closedAt },
-      closedStepId: { $ne: null },
-    }).lean();
-
-    const stepIds = cascade.map((t) => t.closedStepId).filter(Boolean);
-    const threadIds = cascade.map((t) => t.id);
-
-    // Reset all cascaded threads
-    await Thread.updateMany(
-      { id: { $in: threadIds }, studentId },
+    // 1. Reset only this thread
+    await Thread.findOneAndUpdate(
+      { id: threadId, studentId },
       { $set: { closedStepId: null, closedAt: null } }
     );
 
-    // Reset all corresponding roadmap steps
-    for (const sid of stepIds) {
-      await Student.findOneAndUpdate(
-        { id: studentId, 'roadmapSteps.id': sid },
-        {
-          $set: {
-            'roadmapSteps.$.status': 'open',
-            'roadmapSteps.$.committedThreadId': null,
-            'roadmapSteps.$.committedAt': null,
-          },
-        }
-      );
-    }
+    // 2. Reset only its roadmap step
+    await Student.findOneAndUpdate(
+      { id: studentId, 'roadmapSteps.id': stepId },
+      {
+        $set: {
+          'roadmapSteps.$.status': 'open',
+          'roadmapSteps.$.committedThreadId': null,
+          'roadmapSteps.$.committedAt': null,
+        },
+      }
+    );
+
+    console.log(`[Threads] Uncommitted thread ${threadId} from step "${stepId}"`);
 
     const updatedStudent = await Student.findOne({ id: studentId }).lean();
-    const updatedThreads = await Thread.find({ studentId }).sort({ lastActivity: -1 }).lean();
-
-    res.json({ roadmapSteps: updatedStudent?.roadmapSteps, threads: updatedThreads });
+    res.json({ ok: true, roadmapSteps: updatedStudent?.roadmapSteps });
   } catch (error) {
     console.error('[Threads] PATCH uncommit error:', error);
     res.status(500).json({ error: 'Failed to uncommit thread' });
