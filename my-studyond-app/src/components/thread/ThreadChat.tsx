@@ -203,7 +203,7 @@ export function ThreadChat({ thread }: ThreadChatProps) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={`Ask about ${thread.card.name}...`}
-            className="flex-1 resize-none rounded-xl min-h-[44px] max-h-[100px]"
+            className="text-primary flex-1 resize-none rounded-xl min-h-[44px] max-h-[100px]"
             rows={1}
           />
           <Button

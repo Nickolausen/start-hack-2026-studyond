@@ -108,7 +108,7 @@ export function CommitButton({ threadId }: CommitButtonProps) {
                     size="sm"
                     variant="ghost"
                     onClick={() => setShowConfirm(false)}
-                    className="rounded-full"
+                    className="text-primary rounded-full"
                   >
                     Cancel
                   </Button>

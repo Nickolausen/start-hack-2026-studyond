@@ -80,7 +80,7 @@ export function HomePage() {
               )}
             </div>
             <Link to="/chat">
-              <Button variant="outline" size="sm" className="rounded-full gap-2">
+              <Button variant="outline" size="sm" className="text-primary rounded-full gap-2">
                 <Sparkles className="size-3.5 text-ai-solid" />
                 Find more
               </Button>

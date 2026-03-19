@@ -71,7 +71,7 @@ export function ThreadPage() {
           {/* Back + actions */}
           <div className="flex items-center justify-between">
             <Link to="/">
-              <Button variant="ghost" size="sm" className="rounded-full gap-1.5 -ml-2">
+              <Button variant="ghost" size="sm" className="rounded-full gap-1.5 -ml-2 text-primary">
                 <ArrowLeft className="size-4" />
                 Inbox
               </Button>

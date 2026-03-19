@@ -216,7 +216,7 @@ export function ChatInterface({ onMatchesReceived }: ChatInterfaceProps) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Describe your thesis idea or what you're looking for..."
-            className="flex-1 resize-none rounded-xl min-h-[44px] max-h-[120px] ds-body"
+            className="text-primary flex-1 resize-none rounded-xl min-h-[44px] max-h-[120px] ds-body"
             rows={1}
           />
           <Button

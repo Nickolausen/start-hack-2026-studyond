@@ -49,7 +49,7 @@ export function Navbar() {
             className={`rounded-full relative ${isActive('/') ? 'bg-muted' : ''}`}
             aria-label="Home"
           >
-            <Home className="size-4" />
+            <Home className="size-4 text-foreground" />
             {unreadCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 size-4 bg-primary text-primary-foreground rounded-full text-[10px] font-medium flex items-center justify-center">
                 {unreadCount}
