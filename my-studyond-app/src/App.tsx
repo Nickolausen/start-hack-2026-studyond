@@ -6,6 +6,9 @@ import { HomePage } from './pages/HomePage';
 import { ChatbotPage } from './pages/ChatbotPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ThreadPage } from './pages/ThreadPage';
+import { useRoadmapStore } from './store/roadmap-store';
+import { useEffect } from 'react';
+import { thesisRoadmap } from './data/thesis-roadmap';
 
 function AppLayout() {
   return (
@@ -24,6 +27,12 @@ function AppLayout() {
 }
 
 function App() {
+  const setData = useRoadmapStore((s) => s.setData);
+
+  useEffect(() => {
+    setData(thesisRoadmap);
+  }, [setData]);
+  
   return (
     <ThemeProvider>
       <BrowserRouter>
