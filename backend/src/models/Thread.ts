@@ -1,9 +1,12 @@
 import mongoose, { Schema, type Document } from 'mongoose';
 
-// ---- Embedded MatchCard (no initials — frontend-only concern) ----
+// ---- Embedded MatchCard ----
+// entityType now supports all 5 entity types in the dependency graph
+export type MatchEntityType = 'field' | 'company' | 'expert' | 'supervisor' | 'topic';
+
 export interface MatchCardDoc {
   id: string;
-  entityType: 'topic' | 'supervisor' | 'company';
+  entityType: MatchEntityType;
   entityId: string;
   name: string;
   subtitle: string;
@@ -13,6 +16,16 @@ export interface MatchCardDoc {
   tags: string[];
   topicTitle?: string;
   university?: string;
+  /** For experts: the parent company ID (used by dependency engine) */
+  companyId?: string;
+  /** For topics: the owning company or university ID */
+  ownerEntityId?: string;
+  /** For topics: linked supervisor IDs */
+  supervisorIds?: string[];
+  /** For topics: linked expert IDs */
+  expertIds?: string[];
+  /** Field IDs associated with this entity */
+  fieldIds?: string[];
 }
 
 export interface ThreadMessageDoc {
@@ -29,6 +42,7 @@ export interface ThreadDoc extends Document {
   messages: ThreadMessageDoc[];
   lastActivity: Date;
   isRead: boolean;
+  /** Which roadmap step this thread is committed to; null = not committed */
   closedStepId: string | null;
   closedAt: Date | null;
 }
@@ -36,7 +50,11 @@ export interface ThreadDoc extends Document {
 const matchCardSchema = new Schema<MatchCardDoc>(
   {
     id: { type: String, required: true },
-    entityType: { type: String, required: true },
+    entityType: {
+      type: String,
+      required: true,
+      enum: ['field', 'company', 'expert', 'supervisor', 'topic'],
+    },
     entityId: { type: String, required: true },
     name: { type: String, required: true },
     subtitle: { type: String, default: '' },
@@ -46,6 +64,11 @@ const matchCardSchema = new Schema<MatchCardDoc>(
     tags: { type: [String], default: [] },
     topicTitle: { type: String },
     university: { type: String },
+    companyId: { type: String },
+    ownerEntityId: { type: String },
+    supervisorIds: { type: [String] },
+    expertIds: { type: [String] },
+    fieldIds: { type: [String] },
   },
   { _id: false }
 );

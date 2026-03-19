@@ -12,6 +12,22 @@ import type { Thread, ThreadMessage } from '@/types';
 // Fallback questions derived from card context (used while AI-generated ones load)
 function getFallbackQuestions(thread: Thread): string[] {
   const { entityType, tags, topicTitle } = thread.card;
+  if (entityType === 'field') {
+    return [
+      'What thesis topics are popular in this field right now?',
+      'Which companies work in this area?',
+      'What skills are most valued in this field?',
+      'Which supervisors specialize in this area?',
+    ];
+  }
+  if (entityType === 'expert') {
+    return [
+      'What is your role and day-to-day work like?',
+      'Do you offer interviews or mentoring for thesis students?',
+      'What kind of thesis projects have you supervised before?',
+      'What technical skills matter most for working with you?',
+    ];
+  }
   if (entityType === 'supervisor') {
     return [
       'What are your main current research areas?',
@@ -58,7 +74,7 @@ function TypingIndicator() {
 }
 
 export function ThreadChat({ thread }: ThreadChatProps) {
-  const { profile, addMessageToThread, markThreadRead, buildSystemContext } = useAppStore();
+  const { profile, addMessageToThread, markThreadRead, buildSystemContext, buildRoadmapContext } = useAppStore();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>(
@@ -73,11 +89,19 @@ export function ThreadChat({ thread }: ThreadChatProps) {
   const threadContext = {
     entityName: thread.card.name,
     entityType: thread.card.entityType,
+    entityId: thread.card.entityId,
     topicTitle: thread.card.topicTitle,
     description: thread.card.description,
     tags: thread.card.tags,
     compatibilityScore: thread.card.compatibilityScore,
+    companyId: thread.card.companyId,
+    universityName: thread.card.university,
+    fieldIds: thread.card.fieldIds,
+    supervisorIds: thread.card.supervisorIds,
+    expertIds: thread.card.expertIds,
   };
+
+  const roadmapContext = buildRoadmapContext();
 
   // Mark as read + generate AI-powered suggested questions on mount
   useEffect(() => {
@@ -86,7 +110,7 @@ export function ThreadChat({ thread }: ThreadChatProps) {
     // Only fetch questions if this is the initial state (1 message = just the welcome)
     if (thread.messages.length === 1) {
       setQuestionsLoading(true);
-      generateThreadQuestions(threadContext)
+      generateThreadQuestions(threadContext, roadmapContext)
         .then((questions) => {
           if (questions.length > 0) setSuggestedQuestions(questions);
         })
@@ -121,7 +145,8 @@ export function ThreadChat({ thread }: ThreadChatProps) {
       const responseText = await sendThreadMessage(
         messageText,
         threadContext,
-        buildSystemContext()
+        buildSystemContext(),
+        roadmapContext
       );
 
       const assistantMessage: ThreadMessage = {

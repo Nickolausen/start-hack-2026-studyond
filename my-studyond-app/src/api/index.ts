@@ -1,9 +1,18 @@
 /**
  * Studyond API client — typed fetch wrappers for all backend endpoints.
- * All calls are relative (proxied by Vite dev server to http://localhost:5000).
+ * All calls are relative (proxied by Vite dev server to http://localhost:3001).
  */
 
-import type { StudentProfile, MatchCard, Thread, ThreadMessage, RoadmapStep, RoadmapStepId } from '@/types';
+import type {
+  StudentProfile,
+  MatchCard,
+  Thread,
+  ThreadMessage,
+  RoadmapStep,
+  RoadmapStepId,
+  AutoCommit,
+  CommitConflict,
+} from '@/types';
 
 const BASE = '/api';
 
@@ -13,6 +22,10 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
+  // For commit conflicts (409), return the response body — caller handles it
+  if (res.status === 409) {
+    return res.json() as Promise<T>;
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? `API error ${res.status}`);
@@ -77,25 +90,49 @@ export async function deleteThread(studentId: string, threadId: string): Promise
   await apiFetch(`/students/${studentId}/threads/${threadId}`, { method: 'DELETE' });
 }
 
+// ---- Commit / Uncommit (dependency-aware) ----
+
+export interface CommitResponse {
+  success: boolean;
+  thread?: Thread;
+  roadmapSteps?: RoadmapStep[];
+  autoCommitted?: AutoCommit[];
+  conflicts?: CommitConflict[];
+  message?: string;
+}
+
 export async function commitThread(
   studentId: string,
   threadId: string,
-  stepId: RoadmapStepId
-): Promise<{ thread: Thread; roadmapSteps: RoadmapStep[] }> {
-  return apiFetch(`/students/${studentId}/threads/${threadId}/commit`, {
-    method: 'PATCH',
-    body: JSON.stringify({ stepId }),
-  });
+  stepId: RoadmapStepId,
+  force: boolean = false
+): Promise<CommitResponse> {
+  return apiFetch<CommitResponse>(
+    `/students/${studentId}/threads/${threadId}/commit`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ stepId, force }),
+    }
+  );
+}
+
+export interface UncommitResponse {
+  ok: boolean;
+  roadmapSteps: RoadmapStep[];
+  cascadedSteps: RoadmapStepId[];
 }
 
 export async function uncommitThread(
   studentId: string,
   threadId: string
-): Promise<{ roadmapSteps: RoadmapStep[]; threads: Thread[] }> {
-  return apiFetch(`/students/${studentId}/threads/${threadId}/uncommit`, {
-    method: 'PATCH',
-    body: JSON.stringify({}),
-  });
+): Promise<UncommitResponse> {
+  return apiFetch<UncommitResponse>(
+    `/students/${studentId}/threads/${threadId}/uncommit`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({}),
+    }
+  );
 }
 
 export async function addThreadMessage(
@@ -137,31 +174,45 @@ export async function triggerSeed(): Promise<{ ok: boolean; inserted: number; up
 export interface ThreadContext {
   entityName: string;
   entityType: string;
+  entityId?: string;
   topicTitle?: string;
   description: string;
   tags: string[];
   compatibilityScore?: number;
+  companyId?: string;
+  companyName?: string;
+  universityName?: string;
+  fieldIds?: string[];
+  supervisorIds?: string[];
+  expertIds?: string[];
+}
+
+export interface RoadmapContext {
+  committedSteps: Array<{ id: string; label: string; entityName: string | null }>;
+  openSteps: Array<{ id: string; label: string }>;
 }
 
 export async function sendThreadMessage(
   message: string,
   threadContext: ThreadContext,
-  systemContext?: string
+  systemContext?: string,
+  roadmapContext?: RoadmapContext
 ): Promise<string> {
   const data = await apiFetch<{ text: string; error?: string }>('/thread-chat', {
     method: 'POST',
-    body: JSON.stringify({ message, threadContext, systemContext }),
+    body: JSON.stringify({ message, threadContext, systemContext, roadmapContext }),
   });
   if (!data.text) throw new Error(data.error ?? 'Empty response');
   return data.text;
 }
 
 export async function generateThreadQuestions(
-  threadContext: ThreadContext
+  threadContext: ThreadContext,
+  roadmapContext?: RoadmapContext
 ): Promise<string[]> {
   const data = await apiFetch<{ questions: string[] }>('/thread-chat', {
     method: 'POST',
-    body: JSON.stringify({ suggestQuestions: true, threadContext }),
+    body: JSON.stringify({ suggestQuestions: true, threadContext, roadmapContext }),
   });
   return data.questions ?? [];
 }

@@ -1,7 +1,8 @@
 import { Router, type Request, type Response } from 'express';
 import { randomUUID } from 'crypto';
 import { Thread } from '../models/Thread.js';
-import { Student } from '../models/Student.js';
+import type { RoadmapStepId } from '../models/Student.js';
+import { planCommit, executeCommit, executeUncommit } from '../services/commitEngine.js';
 
 export const threadsRouter = Router({ mergeParams: true });
 
@@ -59,23 +60,15 @@ threadsRouter.post('/', async (req: Request, res: Response) => {
 
 // DELETE /api/students/:studentId/threads/:threadId
 threadsRouter.delete('/:threadId', async (req: Request, res: Response) => {
-  const { studentId, threadId } = req.params;
+  const studentId = req.params.studentId as string;
+  const threadId = req.params.threadId as string;
   try {
     const thread = await Thread.findOne({ id: threadId, studentId }).lean();
     if (!thread) { res.status(404).json({ error: 'Thread not found' }); return; }
 
-    // If this thread closed a step, reopen that step
+    // If this thread closed a step, uncommit it (with downstream cascade)
     if (thread.closedStepId) {
-      await Student.findOneAndUpdate(
-        { id: studentId, 'roadmapSteps.id': thread.closedStepId },
-        {
-          $set: {
-            'roadmapSteps.$.status': 'open',
-            'roadmapSteps.$.committedThreadId': null,
-            'roadmapSteps.$.committedAt': null,
-          },
-        }
-      );
+      await executeUncommit(studentId, threadId);
     }
 
     await Thread.deleteOne({ id: threadId, studentId });
@@ -86,97 +79,93 @@ threadsRouter.delete('/:threadId', async (req: Request, res: Response) => {
   }
 });
 
-// PATCH /api/students/:studentId/threads/:threadId/commit
-threadsRouter.patch('/:threadId/commit', async (req: Request, res: Response) => {
-  const { studentId, threadId } = req.params;
+// ---- COMMIT (dependency-aware) ----
+
+/**
+ * POST /api/students/:studentId/threads/:threadId/plan-commit
+ * Dry-run: returns the commit plan (auto-commits + conflicts) without executing.
+ * Frontend can use this to show confirmation dialogs for conflicts.
+ */
+threadsRouter.post('/:threadId/plan-commit', async (req: Request, res: Response) => {
+  const studentId = req.params.studentId as string;
+  const threadId = req.params.threadId as string;
   const { stepId } = req.body as { stepId: string };
 
   if (!stepId) { res.status(400).json({ error: 'stepId is required' }); return; }
 
   try {
-    const student = await Student.findOne({ id: studentId });
-    if (!student) { res.status(404).json({ error: 'Student not found' }); return; }
+    const plan = await planCommit(studentId, threadId, stepId as RoadmapStepId);
+    res.json(plan);
+  } catch (error) {
+    console.error('[Threads] POST plan-commit error:', error);
+    res.status(500).json({ error: 'Failed to plan commit' });
+  }
+});
 
-    const step = student.roadmapSteps.find((s) => s.id === stepId);
-    if (!step) { res.status(400).json({ error: `Step "${stepId}" not found` }); return; }
+/**
+ * PATCH /api/students/:studentId/threads/:threadId/commit
+ * Execute the commit. Pass `force: true` to overwrite conflicting steps.
+ *
+ * Response:
+ *   - success: true → { thread, roadmapSteps, autoCommitted }
+ *   - success: false → { conflicts } (caller must re-request with force=true or cancel)
+ */
+threadsRouter.patch('/:threadId/commit', async (req: Request, res: Response) => {
+  const studentId = req.params.studentId as string;
+  const threadId = req.params.threadId as string;
+  const { stepId, force = false } = req.body as { stepId: string; force?: boolean };
 
-    // If the step is already committed by another thread, uncommit that thread first
-    if (step.status === 'committed' && step.committedThreadId && step.committedThreadId !== threadId) {
-      await Thread.findOneAndUpdate(
-        { id: step.committedThreadId, studentId },
-        { $set: { closedStepId: null, closedAt: null } }
-      );
+  if (!stepId) { res.status(400).json({ error: 'stepId is required' }); return; }
+
+  try {
+    const result = await executeCommit(studentId, threadId, stepId as RoadmapStepId, force);
+
+    if (!result.success) {
+      // Return 409 Conflict with the conflicts array
+      res.status(409).json({
+        success: false,
+        conflicts: result.conflicts,
+        message: 'Committing this entity would overwrite existing commitments. Send force=true to confirm.',
+      });
+      return;
     }
 
-    const now = new Date();
+    // Fetch the updated thread
+    const updatedThread = await Thread.findOne({ id: threadId, studentId }).lean();
 
-    // Update step on student
-    await Student.findOneAndUpdate(
-      { id: studentId, 'roadmapSteps.id': stepId },
-      {
-        $set: {
-          'roadmapSteps.$.status': 'committed',
-          'roadmapSteps.$.committedThreadId': threadId,
-          'roadmapSteps.$.committedAt': now,
-        },
-      }
-    );
-
-    // Update thread
-    const updatedThread = await Thread.findOneAndUpdate(
-      { id: threadId, studentId },
-      { $set: { closedStepId: stepId, closedAt: now } },
-      { returnDocument: "after" }
-    ).lean();
-
-    const updatedStudent = await Student.findOne({ id: studentId }).lean();
-
-    res.json({ thread: updatedThread, roadmapSteps: updatedStudent?.roadmapSteps });
+    res.json({
+      success: true,
+      thread: updatedThread,
+      roadmapSteps: result.updatedSteps,
+      autoCommitted: result.autoCommitted,
+    });
   } catch (error) {
     console.error('[Threads] PATCH commit error:', error);
     res.status(500).json({ error: 'Failed to commit thread' });
   }
 });
 
-// PATCH /api/students/:studentId/threads/:threadId/uncommit
-// No cascade — only reverts this specific thread and its roadmap step.
+/**
+ * PATCH /api/students/:studentId/threads/:threadId/uncommit
+ * Uncommit this thread's step AND cascade-uncommit all downstream dependents.
+ */
 threadsRouter.patch('/:threadId/uncommit', async (req: Request, res: Response) => {
-  const { studentId, threadId } = req.params;
+  const studentId = req.params.studentId as string;
+  const threadId = req.params.threadId as string;
 
   try {
-    const thread = await Thread.findOne({ id: threadId, studentId }).lean();
-    if (!thread) { res.status(404).json({ error: 'Thread not found' }); return; }
+    const { updatedSteps, cascadedSteps } = await executeUncommit(studentId, threadId);
 
-    // Not committed — nothing to do
-    if (!thread.closedStepId) {
-      res.json({ ok: true, roadmapSteps: (await Student.findOne({ id: studentId }).lean())?.roadmapSteps });
-      return;
-    }
-
-    const stepId = thread.closedStepId;
-
-    // 1. Reset only this thread
-    await Thread.findOneAndUpdate(
-      { id: threadId, studentId },
-      { $set: { closedStepId: null, closedAt: null } }
+    console.log(
+      `[Threads] Uncommitted thread ${threadId}` +
+        (cascadedSteps.length > 0 ? ` (cascaded: ${cascadedSteps.join(', ')})` : '')
     );
 
-    // 2. Reset only its roadmap step
-    await Student.findOneAndUpdate(
-      { id: studentId, 'roadmapSteps.id': stepId },
-      {
-        $set: {
-          'roadmapSteps.$.status': 'open',
-          'roadmapSteps.$.committedThreadId': null,
-          'roadmapSteps.$.committedAt': null,
-        },
-      }
-    );
-
-    console.log(`[Threads] Uncommitted thread ${threadId} from step "${stepId}"`);
-
-    const updatedStudent = await Student.findOne({ id: studentId }).lean();
-    res.json({ ok: true, roadmapSteps: updatedStudent?.roadmapSteps });
+    res.json({
+      ok: true,
+      roadmapSteps: updatedSteps,
+      cascadedSteps,
+    });
   } catch (error) {
     console.error('[Threads] PATCH uncommit error:', error);
     res.status(500).json({ error: 'Failed to uncommit thread' });
@@ -201,7 +190,7 @@ threadsRouter.post('/:threadId/messages', async (req: Request, res: Response) =>
     const updated = await Thread.findOneAndUpdate(
       { id: threadId, studentId },
       { $push: { messages: message }, $set: { lastActivity: new Date(), isRead: false } },
-      { returnDocument: "after" }
+      { returnDocument: 'after' }
     ).lean();
 
     if (!updated) { res.status(404).json({ error: 'Thread not found' }); return; }

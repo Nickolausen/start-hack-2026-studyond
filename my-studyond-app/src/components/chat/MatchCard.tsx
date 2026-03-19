@@ -1,4 +1,4 @@
-import { Star, Building2, GraduationCap, BookOpen, ExternalLink } from 'lucide-react';
+import { Star, Building2, GraduationCap, BookOpen, ExternalLink, Compass, UserCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,9 @@ function StarRating({ score }: { score: number }) {
 }
 
 function EntityIcon({ type }: { type: MatchCardType['entityType'] }) {
+  if (type === 'field') return <Compass className="size-3.5" />;
   if (type === 'company') return <Building2 className="size-3.5" />;
+  if (type === 'expert') return <UserCheck className="size-3.5" />;
   if (type === 'supervisor') return <GraduationCap className="size-3.5" />;
   return <BookOpen className="size-3.5" />;
 }
@@ -88,7 +90,7 @@ export function MatchCard({ card, isTop = false }: MatchCardProps) {
             </div>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-muted-foreground ds-badge flex-shrink-0">
               <EntityIcon type={card.entityType} />
-              {card.entityType === 'company' ? 'Company' : card.entityType === 'supervisor' ? 'Professor' : 'Topic'}
+              {card.entityType === 'field' ? 'Field' : card.entityType === 'company' ? 'Company' : card.entityType === 'expert' ? 'Expert' : card.entityType === 'supervisor' ? 'Professor' : 'Topic'}
             </span>
           </div>
           {card.university && (

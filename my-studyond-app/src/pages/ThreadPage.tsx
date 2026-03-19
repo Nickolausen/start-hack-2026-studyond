@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Star, Building2, GraduationCap, BookOpen, Trash2 } from 'lucide-react';
+import { ArrowLeft, Star, Building2, GraduationCap, BookOpen, Trash2, Compass, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ThreadChat } from '@/components/thread/ThreadChat';
@@ -9,7 +9,9 @@ import { useAppStore } from '@/store/useAppStore';
 import { getInitialsColor, getInitialsFromName } from '@/data/mockMatches';
 
 function EntityTypeIcon({ type }: { type: string }) {
+  if (type === 'field') return <Compass className="size-3.5" />;
   if (type === 'company') return <Building2 className="size-3.5" />;
+  if (type === 'expert') return <UserCheck className="size-3.5" />;
   if (type === 'supervisor') return <GraduationCap className="size-3.5" />;
   return <BookOpen className="size-3.5" />;
 }
@@ -102,7 +104,7 @@ export function ThreadPage() {
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-muted-foreground ds-badge">
                   <EntityTypeIcon type={card.entityType} />
-                  {card.entityType === 'company' ? 'Company' : card.entityType === 'supervisor' ? 'Professor' : 'Topic'}
+                  {card.entityType === 'field' ? 'Field' : card.entityType === 'company' ? 'Company' : card.entityType === 'expert' ? 'Expert' : card.entityType === 'supervisor' ? 'Professor' : 'Topic'}
                 </span>
                 <div className="flex items-center gap-1.5">
                   <MiniStars score={card.compatibilityScore} />

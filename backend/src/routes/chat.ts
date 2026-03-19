@@ -7,25 +7,49 @@ import {
   stepCountIs,
   type UIMessage,
 } from 'ai';
-import { Student } from '../models/Student.js';
-import { Thread } from '../models/Thread.js';
-import { searchDatabaseTool, getEntityDetailsTool } from '../tools/searchDatabase.js';
+import { Student, type RoadmapStepDoc } from '../models/Student.js';
+import { Thread, type ThreadDoc } from '../models/Thread.js';
+import {
+  searchDatabaseTool,
+  getEntityDetailsTool,
+  listFieldsTool,
+  getRoadmapStateTool,
+} from '../tools/searchDatabase.js';
 
 export const chatRouter = Router();
 
-// ---- System prompt for search mode ----
+// ---- System prompt ----
 
 const SEARCH_SYSTEM_PROMPT = `You are Studyond's AI thesis advisor — warm, direct, and knowledgeable about Swiss academia and industry.
 
 ## Your Role
-Help students find the perfect thesis topic, company partner, or academic supervisor.
+Help students navigate the thesis journey: choosing a field, finding companies, experts, supervisors, and ultimately a thesis topic.
+
+## Thesis Journey Dependency Graph
+The student's roadmap has 5 steps with strict dependencies:
+  - Field → Company → Expert → Topic  (industry path)
+  - Field → Supervisor → Topic         (academic path)
+  - Or a mix: Company → Expert → Topic, Supervisor → Topic, or directly to Topic
+
+When a student commits to an entity, parent dependencies are auto-committed.
+When they uncommit an entity, downstream dependents are cascaded-uncommitted.
+
+## Guided Routing
+- For NEW students (no committed steps): Default to suggesting they start by choosing a **Field** of study. Use listFields to show available fields. This is the most productive starting point.
+- If they already have a Field: Suggest Companies OR Supervisors as next steps (depending on their objectives).
+- If they have a Company: Suggest Experts at that company.
+- If they have a Supervisor or Expert: Suggest Topics.
+- ALWAYS check the student's current roadmap state to tailor recommendations.
+- The student CAN skip ahead (e.g. directly search for topics) — don't block them, but mention what parent steps will be auto-committed.
 
 ## Workflow
-1. When the student asks about thesis opportunities, ALWAYS call the searchDatabase tool first.
-2. Use only entity IDs returned by searchDatabase — never invent IDs.
-3. After searching, generate a short encouraging 1-2 sentence response, then output the match cards JSON block.
-4. If you need more details about a specific entity, call getEntityDetails.
-5. Be efficient — one or two tool calls is enough. Don't over-search.
+1. When the student asks about thesis opportunities, ALWAYS call searchDatabase first.
+2. Use listFields when the student needs to choose a field or is just starting.
+3. Use getRoadmapState to check what they've already committed before recommending.
+4. Use only entity IDs returned by tools — never invent IDs.
+5. After searching, output a short encouraging 1-2 sentence response, then the match cards JSON block.
+6. Use getEntityDetails for deeper information about a specific entity.
+7. Be efficient — one or two tool calls per turn is enough.
 
 ## Match Card Format
 After your text response, output a fenced JSON block like this:
@@ -41,84 +65,101 @@ After your text response, output a fenced JSON block like this:
       "subtitle": "Telecommunications · IT Services",
       "imageUrl": null,
       "compatibilityScore": 4.2,
-      "description": "2-3 sentences explaining why this is a great match based on the student's specific profile and query. Reference their exact skills and interests.",
-      "tags": ["#FederatedLearning", "#Hybrid", "#Privacy", "#Python"],
+      "description": "2-3 sentences explaining why this is a great match.",
+      "tags": ["#FederatedLearning", "#Hybrid", "#Privacy"],
       "topicTitle": "Federated Learning for Telecom Network Optimization",
-      "university": null
+      "university": null,
+      "companyId": "company-04",
+      "fieldIds": ["field-01", "field-03"],
+      "supervisorIds": [],
+      "expertIds": ["expert-07"]
     }
   ]
 }
 \`\`\`
 
 ## Match Card Rules
-- Generate 5-8 match cards per response, sorted by compatibilityScore DESCENDING (highest first)
-- compatibilityScore uses the FULL 1.0–5.0 range:
-  * 4.5–5.0 = exceptional alignment (student's exact skills + ideal topic + perfect fit)
-  * 3.5–4.4 = good match (relevant skills, related domain, minor gaps)
-  * 2.5–3.4 = moderate match (some overlap, notable skill gaps or domain stretch)
-  * 1.5–2.4 = weak match (significant mismatch, included only for diversity)
-  * 1.0–1.4 = very poor match
-  Most matches will be in the 2.5–4.0 range. Only truly exceptional fits get 4.5+.
-  NEVER give every card a score above 4.0 — differentiate scores meaningfully.
-- entityType must be "topic", "supervisor", or "company"
-- entityId MUST be a real ID from searchDatabase results
-- For topic cards: name = company/university behind the topic; topicTitle = the actual thesis title
-- For supervisor cards: name = "Prof. Dr. Firstname Lastname"; university = university name
+- Generate 5-8 cards per response, sorted by compatibilityScore DESCENDING
+- compatibilityScore: 1.0–5.0 scale with meaningful differentiation
+  * 4.5–5.0 = exceptional alignment
+  * 3.5–4.4 = good match
+  * 2.5–3.4 = moderate match
+  * 1.5–2.4 = weak match
+  NEVER give every card above 4.0.
+- entityType: "field", "topic", "supervisor", "company", or "expert"
+- entityId MUST be a real ID from tool results
+- For field cards: name = field name; no topicTitle
+- For topic cards: name = company/university name; topicTitle = thesis title; include companyId, supervisorIds, expertIds, fieldIds from DB
+- For supervisor cards: name = "Prof. Dr. First Last"; university = university name; include fieldIds
 - For company cards: name = company name; topicTitle = null
-- tags: specific hashtags like #NLP, #Remote, #Fintech, #Python, #Hybrid, #OnSite, #Remote
-- descriptions must reference the student's specific skills and their query
+- For expert cards: name = "First Last"; subtitle = "Title at Company"; include companyId, fieldIds
+- tags: specific hashtags like #NLP, #Remote, #Fintech, #Python
+- descriptions must reference the student's specific skills and interests
 - ALWAYS output the JSON block — the UI depends on it
+- ALWAYS include fieldIds, companyId, supervisorIds, expertIds when available from DB data — the commit engine needs these for dependency resolution
 - Tone: warm, peer-like. Short sentences.`;
 
-// ---- Build enriched context from DB (committed steps) ----
+// ---- Build enriched context from DB ----
+
 async function buildEnrichedContext(baseContext: string, studentId: string): Promise<string> {
   try {
     const student = await Student.findOne({ id: studentId }).lean();
     if (!student) return baseContext;
 
-    const committedSteps = student.roadmapSteps.filter(
-      (s) => s.status === 'committed' && s.committedThreadId
+    const steps = student.roadmapSteps as RoadmapStepDoc[];
+    const committedSteps = steps.filter(
+      (s: RoadmapStepDoc) => s.status === 'committed' && s.committedEntityId
     );
-    if (committedSteps.length === 0) return baseContext;
 
-    const threads = await Thread.find({
-      id: { $in: committedSteps.map((s) => s.committedThreadId) },
-    }).lean();
-    const threadMap: Record<string, (typeof threads)[0]> = {};
-    threads.forEach((t) => { threadMap[t.id] = t; });
+    if (committedSteps.length === 0 && !baseContext) {
+      return `Student ID: ${studentId}\nNo committed steps yet — this is a fresh start. Guide them to choose a Field first.`;
+    }
+
+    const threads = committedSteps
+      .filter((s: RoadmapStepDoc) => s.committedThreadId)
+      .map((s: RoadmapStepDoc) => s.committedThreadId!);
+
+    const threadDocs: ThreadDoc[] = threads.length > 0
+      ? await Thread.find({ id: { $in: threads } }).lean()
+      : [];
+    const threadMap = new Map(threadDocs.map((t: ThreadDoc) => [t.id, t]));
 
     const commitLines = committedSteps
-      .map((step) => {
-        const t = threadMap[step.committedThreadId!];
-        if (!t) return null;
-        const detail = t.card.topicTitle
-          ? `"${t.card.topicTitle}" (via ${t.card.name})`
-          : t.card.name;
-        return `  ✓ ${step.label}: ${detail} [committed ${
-          step.committedAt ? new Date(step.committedAt).toLocaleDateString() : 'recently'
-        }]`;
+      .map((step: RoadmapStepDoc) => {
+        const t = step.committedThreadId ? threadMap.get(step.committedThreadId) : null;
+        const entityDetail = step.committedEntityName ?? step.committedEntityId ?? 'unknown';
+        const threadDetail = t?.card.topicTitle
+          ? ` — Topic: "${t.card.topicTitle}"`
+          : '';
+        return `  ✓ ${step.label}: ${entityDetail} (${step.id}: ${step.committedEntityId})${threadDetail}`;
       })
-      .filter(Boolean)
       .join('\n');
 
-    const openSteps = student.roadmapSteps
-      .filter((s) => s.status === 'open')
-      .map((s) => `  ○ ${s.label}`)
-      .join(', ');
+    const openSteps = steps
+      .filter((s: RoadmapStepDoc) => s.status === 'open')
+      .map((s: RoadmapStepDoc) => `  ○ ${s.label} (${s.id})`);
 
-    return (
-      baseContext +
-      `\n\n## Thesis Progress\nCommitted:\n${commitLines}` +
-      (openSteps ? `\nStill searching: ${openSteps}` : '') +
-      `\nTailor recommendations to complement these existing decisions.`
-    );
+    let context = baseContext || '';
+    context += `\n\n## Current Roadmap State`;
+    context += `\nStudent ID: ${studentId}`;
+
+    if (commitLines) {
+      context += `\nCommitted:\n${commitLines}`;
+    }
+    if (openSteps.length > 0) {
+      context += `\nStill searching:\n${openSteps.join('\n')}`;
+    }
+    context += `\nTailor recommendations to complement existing decisions. Suggest the most logical next step.`;
+
+    return context;
   } catch (err) {
     console.warn('[Chat] Could not enrich context:', err);
     return baseContext;
   }
 }
 
-// ---- POST /api/chat — search mode (streaming + tools) ----
+// ---- POST /api/chat ----
+
 chatRouter.post('/', async (req: Request, res: Response) => {
   const { messages, systemContext, studentId, mode = 'search' } = req.body as {
     messages?: UIMessage[];
@@ -157,6 +198,8 @@ chatRouter.post('/', async (req: Request, res: Response) => {
       tools: {
         searchDatabase: searchDatabaseTool,
         getEntityDetails: getEntityDetailsTool,
+        listFields: listFieldsTool,
+        getRoadmapState: getRoadmapStateTool,
       },
       onStepFinish: ({ toolCalls }) => {
         if (toolCalls && toolCalls.length > 0) {

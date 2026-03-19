@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { Student, defaultRoadmapSteps } from '../models/Student.js';
+import { Student, defaultRoadmapSteps, type RoadmapStepDoc } from '../models/Student.js';
 import { Topic } from '../models/Topic.js';
 import { Supervisor } from '../models/Supervisor.js';
 import { Company } from '../models/Company.js';
@@ -9,6 +9,7 @@ import { Expert } from '../models/Expert.js';
 import { University } from '../models/University.js';
 import { StudyProgram } from '../models/StudyProgram.js';
 import { Field } from '../models/Field.js';
+import { ThesisProject } from '../models/ThesisProject.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK_DIR = join(__dirname, '../../..', 'kickoff-material/mock-data');
@@ -18,7 +19,7 @@ function readJSON<T>(filename: string): T[] {
   return JSON.parse(raw) as T[];
 }
 
-// Interests for demo student-01 (Luca Meier); others get empty []
+// Interests for demo students
 const STUDENT_INTERESTS: Record<string, string[]> = {
   'student-01': ['AI Efficiency', 'Large Language Models', 'Sustainable Tech', 'Edge Computing'],
   'student-02': ['Sustainability', 'Environmental Science'],
@@ -41,7 +42,7 @@ export async function runSeed(): Promise<{ inserted: number; updated: number }> 
       const result = await (Model as any).findOneAndUpdate(
         { id: doc.id },
         { $set: doc },
-        { upsert: true, returnDocument: "after", runValidators: false }
+        { upsert: true, returnDocument: 'after', runValidators: false }
       );
       if (result) updated++;
       else inserted++;
@@ -102,7 +103,18 @@ export async function runSeed(): Promise<{ inserted: number; updated: number }> 
   await upsert(Topic, topics);
   console.log(`[Seed] Topics: ${topics.length}`);
 
-  // --- Students (extend with new fields) ---
+  // --- Thesis Projects (NEW) ---
+  const projects = readJSON<{
+    id: string; title: string; description: string | null; motivation: string | null;
+    state: string; studentId: string; topicId: string | null;
+    companyId: string | null; universityId: string | null;
+    supervisorIds: string[]; expertIds: string[];
+    createdAt: string; updatedAt: string;
+  }>('projects.json');
+  await upsert(ThesisProject, projects);
+  console.log(`[Seed] Thesis Projects: ${projects.length}`);
+
+  // --- Students (extend with new fields + 5-step roadmap) ---
   const students = readJSON<{
     id: string; firstName: string; lastName: string; email: string; degree: string;
     studyProgramId: string; universityId: string; skills: string[]; about: string | null;
@@ -115,24 +127,50 @@ export async function runSeed(): Promise<{ inserted: number; updated: number }> 
 
     if (existing) {
       // Preserve existing AI tags and roadmap progress; only update base fields
+      // Migrate roadmap if it still has old 3-step format
+      let needsRoadmapMigration = false;
+      if (existing.roadmapSteps.length < 5) {
+        needsRoadmapMigration = true;
+      }
+
+      const updateSet: Record<string, unknown> = {
+        firstName: s.firstName,
+        lastName: s.lastName,
+        email: s.email,
+        degree: s.degree,
+        studyProgramId: s.studyProgramId,
+        universityId: s.universityId,
+        skills: s.skills,
+        about: s.about,
+        objectives: s.objectives,
+        fieldIds: s.fieldIds,
+      };
+
+      // Only set interests if not already customised
+      if (existing.interests.length === 0) {
+        updateSet.interests = interests;
+      }
+
+      // Migrate old 3-step roadmap to 5-step
+      if (needsRoadmapMigration) {
+        const newSteps = defaultRoadmapSteps();
+        // Preserve any existing commits from the old roadmap
+        for (const oldStep of existing.roadmapSteps) {
+          const match = newSteps.find((ns: RoadmapStepDoc) => ns.id === oldStep.id);
+          if (match && oldStep.status === 'committed') {
+            match.status = oldStep.status;
+            match.committedThreadId = oldStep.committedThreadId;
+            match.committedEntityId = oldStep.committedEntityId ?? null;
+            match.committedEntityName = oldStep.committedEntityName ?? null;
+            match.committedAt = oldStep.committedAt;
+          }
+        }
+        updateSet.roadmapSteps = newSteps;
+      }
+
       await Student.findOneAndUpdate(
         { id: s.id },
-        {
-          $set: {
-            firstName: s.firstName,
-            lastName: s.lastName,
-            email: s.email,
-            degree: s.degree,
-            studyProgramId: s.studyProgramId,
-            universityId: s.universityId,
-            skills: s.skills,
-            about: s.about,
-            objectives: s.objectives,
-            fieldIds: s.fieldIds,
-            // Only set interests if not already customised
-            ...(existing.interests.length === 0 && { interests }),
-          },
-        },
+        { $set: updateSet },
         { runValidators: false }
       );
       updated++;

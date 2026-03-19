@@ -1,13 +1,15 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Search, BookOpen, Building2, GraduationCap, ExternalLink } from 'lucide-react';
+import { Check, Search, BookOpen, Building2, GraduationCap, ExternalLink, Compass, UserCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '@/store/useAppStore';
 import type { RoadmapStep } from '@/types';
 
 const STEP_ICONS: Record<string, React.ReactNode> = {
-  topic: <BookOpen className="size-4" />,
-  supervisor: <GraduationCap className="size-4" />,
+  field: <Compass className="size-4" />,
   company: <Building2 className="size-4" />,
+  expert: <UserCheck className="size-4" />,
+  supervisor: <GraduationCap className="size-4" />,
+  topic: <BookOpen className="size-4" />,
 };
 
 function StepCard({ step }: { step: RoadmapStep }) {
@@ -83,10 +85,10 @@ function StepCard({ step }: { step: RoadmapStep }) {
               <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-100/50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors cursor-pointer">
                 <div className="flex-1 min-w-0">
                   <p className="ds-label text-emerald-800 dark:text-emerald-300 truncate">
-                    {committedThread.card.topicTitle ?? committedThread.card.name}
+                    {step.committedEntityName ?? committedThread.card.topicTitle ?? committedThread.card.name}
                   </p>
                   <p className="ds-caption text-emerald-600/70 dark:text-emerald-500/70 truncate">
-                    {committedThread.card.name}
+                    {step.committedEntityId ?? committedThread.card.name}
                     {step.committedAt && ` · ${new Date(step.committedAt).toLocaleDateString()}`}
                   </p>
                 </div>

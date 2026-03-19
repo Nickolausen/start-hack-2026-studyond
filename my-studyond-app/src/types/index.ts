@@ -3,7 +3,7 @@
 // ============================================================
 
 export type Degree = 'bsc' | 'msc' | 'phd';
-export type EntityType = 'company' | 'supervisor' | 'topic';
+export type EntityType = 'field' | 'company' | 'expert' | 'supervisor' | 'topic';
 
 // ---- Student Profile ----
 
@@ -30,14 +30,20 @@ export interface MatchCard {
   entityType: EntityType;
   entityId: string;
   name: string;
-  subtitle: string;           // company domain, prof title, or topic company name
+  subtitle: string;
   imageUrl: string | null;
   compatibilityScore: number; // 1.0–5.0
-  description: string;        // 2-3 sentence AI-generated rationale ("why this matches you")
-  tags: string[];             // all tags equal, e.g. ["#NLP", "#Hybrid", "#Fintech"]
-  topicTitle?: string;        // the actual thesis topic title (for topic-type cards)
-  university?: string;        // for supervisor/topic cards
-  // Frontend-only computed field — not returned by the API
+  description: string;
+  tags: string[];
+  topicTitle?: string;
+  university?: string;
+  // Dependency metadata — used by commit engine
+  companyId?: string;
+  ownerEntityId?: string;
+  supervisorIds?: string[];
+  expertIds?: string[];
+  fieldIds?: string[];
+  // Frontend-only computed field
   initials?: string;
 }
 
@@ -54,7 +60,7 @@ export function computeInitials(name: string): string {
 
 // ---- Roadmap ----
 
-export type RoadmapStepId = 'topic' | 'supervisor' | 'company';
+export type RoadmapStepId = 'field' | 'company' | 'expert' | 'supervisor' | 'topic';
 export type RoadmapStepStatus = 'open' | 'committed';
 
 export interface RoadmapStep {
@@ -63,10 +69,29 @@ export interface RoadmapStep {
   description: string;
   status: RoadmapStepStatus;
   committedThreadId: string | null;
+  committedEntityId: string | null;
+  committedEntityName: string | null;
   committedAt: Date | null;
 }
 
-// ---- Thread (a saved match → becomes a conversation) ----
+// ---- Commit engine types (from backend) ----
+
+export interface CommitConflict {
+  stepId: RoadmapStepId;
+  currentEntityId: string;
+  currentEntityName: string;
+  incomingEntityId: string;
+  incomingEntityName: string;
+}
+
+export interface AutoCommit {
+  stepId: RoadmapStepId;
+  entityId: string;
+  entityName: string;
+  threadId: string | null;
+}
+
+// ---- Thread (a saved match -> becomes a conversation) ----
 
 export interface ThreadMessage {
   id: string;
@@ -76,13 +101,13 @@ export interface ThreadMessage {
 }
 
 export interface Thread {
-  id: string;          // same as the MatchCard.id it was created from
+  id: string;
   card: MatchCard;
   messages: ThreadMessage[];
   lastActivity: Date;
   isRead: boolean;
-  closedStepId: string | null;  // which roadmap step this thread closed; null = not committed
-  closedAt: Date | null;        // when committed; null = not committed
+  closedStepId: string | null;
+  closedAt: Date | null;
 }
 
 // Derived helper

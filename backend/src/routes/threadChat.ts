@@ -9,20 +9,34 @@ export const threadChatRouter = Router();
  *
  * Dedicated endpoint for deep-dive thread conversations. Uses generateText
  * (non-streaming) for simplicity and reliability. Returns plain JSON.
+ *
+ * Now includes dependency context so the AI knows where this entity sits
+ * in the student's thesis journey.
  */
 threadChatRouter.post('/', async (req: Request, res: Response) => {
-  const { message, threadContext, systemContext, suggestQuestions } = req.body as {
+  const { message, threadContext, systemContext, suggestQuestions, roadmapContext } = req.body as {
     message?: string;
     suggestQuestions?: boolean;
     threadContext?: {
       entityName: string;
       entityType: string;
+      entityId?: string;
       topicTitle?: string;
       description: string;
       tags: string[];
       compatibilityScore?: number;
+      companyId?: string;
+      companyName?: string;
+      universityName?: string;
+      fieldIds?: string[];
+      supervisorIds?: string[];
+      expertIds?: string[];
     };
     systemContext?: string;
+    roadmapContext?: {
+      committedSteps: Array<{ id: string; label: string; entityName: string | null }>;
+      openSteps: Array<{ id: string; label: string }>;
+    };
   };
 
   if (!threadContext) {
@@ -35,17 +49,23 @@ threadChatRouter.post('/', async (req: Request, res: Response) => {
   try {
     if (suggestQuestions) {
       // Generate 4 context-aware suggested questions
+      const roadmapInfo = roadmapContext
+        ? `\nStudent's roadmap: ${roadmapContext.committedSteps.map((s) => `${s.label}: ${s.entityName}`).join(', ')}. Still searching: ${roadmapContext.openSteps.map((s) => s.label).join(', ')}.`
+        : '';
+
       const questionsPrompt = `You are helping a student explore a thesis opportunity.
 
 Entity: ${threadContext.entityName} (${threadContext.entityType})
 ${threadContext.topicTitle ? `Topic: ${threadContext.topicTitle}` : ''}
 Description: ${threadContext.description}
 Tags: ${threadContext.tags.join(', ')}
+${threadContext.companyName ? `Company: ${threadContext.companyName}` : ''}
+${threadContext.universityName ? `University: ${threadContext.universityName}` : ''}${roadmapInfo}
 
 Generate exactly 4 short, specific follow-up questions a student would ask when exploring this opportunity.
 Questions must be directly relevant to this specific entity and its tags.
-Return ONLY a JSON array of 4 strings. No explanation. No markdown.
-Example: ["What is the expected timeline?", "What data will I have access to?", "Is remote work possible?", "What technical stack is used?"]`;
+Include at least one question about how this fits their thesis journey / next steps.
+Return ONLY a JSON array of 4 strings. No explanation. No markdown.`;
 
       const result = await generateText({
         model: mistral('mistral-small-latest'),
@@ -60,7 +80,7 @@ Example: ["What is the expected timeline?", "What data will I have access to?", 
         `What technical skills are most important for this ${threadContext.entityType}?`,
         'What is the expected thesis timeline?',
         'How should I reach out or apply?',
-        'What does the research process look like?',
+        'How does this fit into my thesis roadmap?',
       ];
 
       res.json({ questions: questions.slice(0, 4) });
@@ -72,19 +92,42 @@ Example: ["What is the expected timeline?", "What data will I have access to?", 
       return;
     }
 
+    // Build dependency-aware system prompt
+    const entityLabel = threadContext.entityType === 'supervisor'
+      ? 'Academic Supervisor'
+      : threadContext.entityType === 'company'
+        ? 'Company Partner'
+        : threadContext.entityType === 'expert'
+          ? 'Industry Expert'
+          : threadContext.entityType === 'field'
+            ? 'Field of Study'
+            : 'Thesis Topic';
+
+    let roadmapSection = '';
+    if (roadmapContext) {
+      const committed = roadmapContext.committedSteps.map((s) => `✓ ${s.label}: ${s.entityName}`).join('\n  ');
+      const open = roadmapContext.openSteps.map((s) => `○ ${s.label}`).join('\n  ');
+      roadmapSection = `\n\n## Student's Thesis Roadmap\n  ${committed}\n  ${open}`;
+    }
+
     const systemPrompt = `You are Studyond's AI thesis advisor in a focused one-on-one conversation with a student about a specific thesis opportunity.
 
 ## The Opportunity
-Entity: ${threadContext.entityName} (${threadContext.entityType === 'supervisor' ? 'Academic Supervisor' : threadContext.entityType === 'company' ? 'Company Partner' : 'Thesis Topic'})
+Entity: ${threadContext.entityName} (${entityLabel})
 ${threadContext.topicTitle ? `Topic: ${threadContext.topicTitle}` : ''}
 Description: ${threadContext.description}
 Tags: ${threadContext.tags.join(', ')}
-${threadContext.compatibilityScore ? `Match Score: ${threadContext.compatibilityScore}/5.0` : ''}
+${threadContext.companyName ? `Company: ${threadContext.companyName}` : ''}
+${threadContext.universityName ? `University: ${threadContext.universityName}` : ''}
+${threadContext.compatibilityScore ? `Match Score: ${threadContext.compatibilityScore}/5.0` : ''}${roadmapSection}
 
 ## Instructions
 - Answer the student's question specifically about this opportunity
 - Be helpful, concise, and direct — aim for 3-5 sentences
 - Reference specific details from the opportunity (tags, domain, type)
+- If the student asks about next steps or committing, explain what will happen:
+  * Committing auto-commits parent dependencies (e.g. expert → company → field)
+  * Uncommitting cascades to remove downstream decisions
 - Do NOT generate match cards or JSON blocks — this is a focused conversation
 - Tone: warm, knowledgeable, peer-like${systemContext ? `\n\n## Student Context\n${systemContext}` : ''}`;
 

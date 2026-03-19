@@ -7,6 +7,8 @@ import type {
   ThreadMessage,
   RoadmapStep,
   RoadmapStepId,
+  AutoCommit,
+  CommitConflict,
 } from '@/types';
 import { MOCK_STUDENT, MOCK_PROFILE_TAGS } from '@/data/mockStudent';
 import { INITIAL_ROADMAP_STEPS } from '@/data/roadmapSteps';
@@ -60,6 +62,11 @@ interface AppState {
   // Roadmap — persisted to DB (via student document)
   roadmapSteps: RoadmapStep[];
 
+  // Commit conflict state
+  pendingConflicts: CommitConflict[] | null;
+  pendingCommitThreadId: string | null;
+  pendingCommitStepId: RoadmapStepId | null;
+
   // UI
   hasExploredTopics: boolean;
 
@@ -76,8 +83,10 @@ interface AppState {
   addMessageToThread: (threadId: string, message: ThreadMessage) => void;
   markThreadRead: (threadId: string) => void;
 
-  commitToThread: (threadId: string, stepId: RoadmapStepId) => void;
+  commitToThread: (threadId: string, stepId: RoadmapStepId, force?: boolean) => Promise<void>;
   uncommitThread: (threadId: string) => void;
+  clearPendingConflicts: () => void;
+  forceCommit: () => void;
 
   setRoadmapSteps: (steps: RoadmapStep[]) => void;
   hydrateFromDB: (data: {
@@ -90,6 +99,10 @@ interface AppState {
   getThread: (threadId: string) => Thread | undefined;
   getCommittedThreadIds: () => string[];
   buildSystemContext: () => string;
+  buildRoadmapContext: () => {
+    committedSteps: Array<{ id: string; label: string; entityName: string | null }>;
+    openSteps: Array<{ id: string; label: string }>;
+  };
 }
 
 // Fire-and-forget helper — logs errors without throwing
@@ -107,6 +120,9 @@ export const useAppStore = create<AppState>()(
       deckVisible: false,
       savedThreads: [],
       roadmapSteps: INITIAL_ROADMAP_STEPS,
+      pendingConflicts: null,
+      pendingCommitThreadId: null,
+      pendingCommitStepId: null,
       hasExploredTopics: false,
 
       // ---- Profile ----
@@ -138,7 +154,7 @@ export const useAppStore = create<AppState>()(
         // Optimistic UI update
         set((s) => ({ savedThreads: [thread, ...s.savedThreads] }));
 
-        // DB sync — backend creates the thread with the same welcome message
+        // DB sync
         bgSync('saveThread', apiCreateThread(STUDENT_ID, enriched));
       },
 
@@ -151,7 +167,7 @@ export const useAppStore = create<AppState>()(
           roadmapSteps: thread?.closedStepId
             ? s.roadmapSteps.map((step) =>
                 step.id === thread.closedStepId
-                  ? { ...step, status: 'open' as const, committedThreadId: null, committedAt: null }
+                  ? { ...step, status: 'open' as const, committedThreadId: null, committedEntityId: null, committedEntityName: null, committedAt: null }
                   : step
               )
             : s.roadmapSteps,
@@ -161,7 +177,6 @@ export const useAppStore = create<AppState>()(
       },
 
       addMessageToThread: (threadId, message) => {
-        // Optimistic update
         set((s) => ({
           savedThreads: s.savedThreads.map((t) =>
             t.id === threadId
@@ -170,7 +185,6 @@ export const useAppStore = create<AppState>()(
           ),
         }));
 
-        // DB sync — only persist user/assistant messages; skip the init message (already created by backend)
         if (message.id.startsWith('msg-init-')) return;
         bgSync(
           'addMessageToThread',
@@ -187,44 +201,76 @@ export const useAppStore = create<AppState>()(
         bgSync('markThreadRead', apiMarkThreadRead(STUDENT_ID, threadId));
       },
 
-      // ---- Commit / Uncommit ----
+      // ---- Commit / Uncommit (dependency-aware) ----
 
-      commitToThread: (threadId, stepId) => {
-        const now = new Date();
+      commitToThread: async (threadId, stepId, force = false) => {
+        try {
+          const result = await apiCommitThread(STUDENT_ID, threadId, stepId, force);
 
-        // If another thread already closes this step, clear it locally first
-        const previousCommit = get().savedThreads.find(
-          (t) => t.closedStepId === stepId && t.id !== threadId
-        );
+          if (!result.success && result.conflicts && result.conflicts.length > 0) {
+            // Store conflicts for UI to show confirmation dialog
+            set({
+              pendingConflicts: result.conflicts,
+              pendingCommitThreadId: threadId,
+              pendingCommitStepId: stepId,
+            });
+            return;
+          }
 
-        set((s) => ({
-          roadmapSteps: s.roadmapSteps.map((step) =>
-            step.id === stepId
-              ? { ...step, status: 'committed' as const, committedThreadId: threadId, committedAt: now }
-              : step
-          ),
-          savedThreads: s.savedThreads.map((t) => {
-            if (t.id === threadId) return { ...t, closedStepId: stepId, closedAt: now };
-            if (previousCommit && t.id === previousCommit.id)
-              return { ...t, closedStepId: null, closedAt: null };
-            return t;
-          }),
-        }));
+          // Commit succeeded — apply server-authoritative roadmapSteps
+          if (result.roadmapSteps) {
+            set((s) => ({
+              roadmapSteps: result.roadmapSteps!.map((rs) => ({
+                ...rs,
+                committedAt: rs.committedAt ? new Date(rs.committedAt) : null,
+              })),
+              savedThreads: s.savedThreads.map((t) => {
+                if (t.id === threadId) return { ...t, closedStepId: stepId, closedAt: new Date() };
+                // Clear any other threads that were un-committed by the server
+                const serverStep = result.roadmapSteps!.find((rs) => rs.committedThreadId === t.id);
+                if (t.closedStepId && !serverStep) return { ...t, closedStepId: null, closedAt: null };
+                return t;
+              }),
+              pendingConflicts: null,
+              pendingCommitThreadId: null,
+              pendingCommitStepId: null,
+            }));
+          }
 
-        bgSync('commitToThread', apiCommitThread(STUDENT_ID, threadId, stepId));
+          // Log auto-committed steps
+          if (result.autoCommitted && result.autoCommitted.length > 0) {
+            console.log(
+              `[Store] Auto-committed: ${result.autoCommitted.map((ac: AutoCommit) => `${ac.stepId}=${ac.entityName}`).join(', ')}`
+            );
+          }
+        } catch (err) {
+          console.error('[Store] Commit failed:', err);
+        }
       },
 
-      // No cascade — only this thread's step is reverted.
+      forceCommit: () => {
+        const { pendingCommitThreadId, pendingCommitStepId, commitToThread } = get();
+        if (pendingCommitThreadId && pendingCommitStepId) {
+          commitToThread(pendingCommitThreadId, pendingCommitStepId, true);
+        }
+      },
+
+      clearPendingConflicts: () => set({
+        pendingConflicts: null,
+        pendingCommitThreadId: null,
+        pendingCommitStepId: null,
+      }),
+
       uncommitThread: (threadId) => {
         const thread = get().savedThreads.find((t) => t.id === threadId);
         if (!thread?.closedStepId) return;
 
+        // Optimistic: open the primary step (backend will cascade the rest)
         const stepId = thread.closedStepId;
-
         set((s) => ({
           roadmapSteps: s.roadmapSteps.map((step) =>
             step.id === stepId
-              ? { ...step, status: 'open' as const, committedThreadId: null, committedAt: null }
+              ? { ...step, status: 'open' as const, committedThreadId: null, committedEntityId: null, committedEntityName: null, committedAt: null }
               : step
           ),
           savedThreads: s.savedThreads.map((t) =>
@@ -232,7 +278,32 @@ export const useAppStore = create<AppState>()(
           ),
         }));
 
-        bgSync('uncommitThread', apiUncommitThread(STUDENT_ID, threadId));
+        // DB sync — backend cascades downstream steps
+        bgSync('uncommitThread', (async () => {
+          const result = await apiUncommitThread(STUDENT_ID, threadId);
+          // Apply the server-authoritative roadmap (includes cascade)
+          if (result.roadmapSteps) {
+            set((s) => ({
+              roadmapSteps: result.roadmapSteps.map((rs) => ({
+                ...rs,
+                committedAt: rs.committedAt ? new Date(rs.committedAt) : null,
+              })),
+              // Clear closedStepId for any threads that were cascade-uncommitted
+              savedThreads: s.savedThreads.map((t) => {
+                if (t.closedStepId) {
+                  const serverStep = result.roadmapSteps.find((rs) => rs.committedThreadId === t.id);
+                  if (!serverStep || serverStep.status === 'open') {
+                    return { ...t, closedStepId: null, closedAt: null };
+                  }
+                }
+                return t;
+              }),
+            }));
+          }
+          if (result.cascadedSteps && result.cascadedSteps.length > 0) {
+            console.log(`[Store] Cascade-uncommitted: ${result.cascadedSteps.join(', ')}`);
+          }
+        })());
       },
 
       // ---- Roadmap ----
@@ -258,6 +329,8 @@ export const useAppStore = create<AppState>()(
           ...(roadmapSteps !== undefined && {
             roadmapSteps: roadmapSteps.map((s) => ({
               ...s,
+              committedEntityId: s.committedEntityId ?? null,
+              committedEntityName: s.committedEntityName ?? null,
               committedAt: s.committedAt ? new Date(s.committedAt) : null,
             })),
           }),
@@ -272,6 +345,18 @@ export const useAppStore = create<AppState>()(
           .roadmapSteps.filter((s) => s.status === 'committed' && s.committedThreadId)
           .map((s) => s.committedThreadId!),
 
+      buildRoadmapContext: () => {
+        const { roadmapSteps } = get();
+        return {
+          committedSteps: roadmapSteps
+            .filter((s) => s.status === 'committed')
+            .map((s) => ({ id: s.id, label: s.label, entityName: s.committedEntityName })),
+          openSteps: roadmapSteps
+            .filter((s) => s.status === 'open')
+            .map((s) => ({ id: s.id, label: s.label })),
+        };
+      },
+
       buildSystemContext: () => {
         const { profile, profileTags, roadmapSteps, savedThreads } = get();
 
@@ -279,15 +364,15 @@ export const useAppStore = create<AppState>()(
           .filter((s) => s.status === 'committed' && s.committedThreadId)
           .map((s) => {
             const t = savedThreads.find((th) => th.id === s.committedThreadId);
-            const detail = t?.card.topicTitle
-              ? `"${t.card.topicTitle}" via ${t.card.name}`
-              : t?.card.name ?? s.committedThreadId;
-            return `  ✓ ${s.label}: ${detail}`;
+            const detail = s.committedEntityName
+              ?? (t?.card.topicTitle ? `"${t.card.topicTitle}" via ${t.card.name}` : t?.card.name)
+              ?? s.committedThreadId;
+            return `  ✓ ${s.label}: ${detail} (${s.id}: ${s.committedEntityId ?? 'unknown'})`;
           });
 
         const openLines = roadmapSteps
           .filter((s) => s.status === 'open')
-          .map((s) => `  ○ ${s.label}`);
+          .map((s) => `  ○ ${s.label} (${s.id})`);
 
         return `## Student Profile
 Name: ${profile.firstName} ${profile.lastName}
@@ -310,7 +395,6 @@ Objectives: ${profile.objectives.join(', ')}${
     }),
     {
       name: 'studyond-app-state',
-      // swipeDeck and deckVisible are excluded — they're session-only
       partialize: (s) => ({
         profile: s.profile,
         profileTags: s.profileTags,
