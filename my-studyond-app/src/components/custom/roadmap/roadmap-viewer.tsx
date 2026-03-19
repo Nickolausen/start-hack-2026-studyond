@@ -45,14 +45,14 @@ export function RoadmapViewer() {
         className="flex w-full flex-col items-center"
       >
         {/* ── Title & Subtitle ── */}
-        <div className="mb-10 text-center">
+        {/* <div className="mb-10 text-center">
           <h1 className="header-lg text-foreground">{data.title}</h1>
           {data.subtitle && (
             <p className="ds-body mt-2 text-muted-foreground">
               {data.subtitle}
             </p>
           )}
-        </div>
+        </div> */}
 
         {/* ── Ancestor path (linear, no siblings) ── */}
         {ancestors.map((ancestor, i) => (

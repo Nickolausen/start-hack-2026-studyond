@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Sparkles, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Roadmap } from '@/components/home/Roadmap';
 import { ThreadInbox } from '@/components/home/ThreadInbox';
 import { useAppStore } from '@/store/useAppStore';
 import { RoadmapViewer } from '@/components/custom/roadmap/roadmap-viewer';
@@ -13,7 +12,7 @@ export function HomePage() {
 
   return (
     <div className="h-full overflow-y-auto page-enter">
-      <div className="max-w-4xl mx-auto px-4 lg:px-8 py-8 space-y-10">
+      <div className="max-w-4xl mx-auto py-8 space-y-10">
 
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -27,12 +26,6 @@ export function HomePage() {
                 : 'Your thesis journey is on track.'}
             </p>
           </div>
-          <Link to="/chat">
-            <Button className="bg-ai ai-pulse rounded-full gap-2 hidden sm:flex">
-              <Sparkles className="size-4" />
-              AI Advisor
-            </Button>
-          </Link>
         </div>
 
         {/* Progress summary */}
@@ -65,7 +58,6 @@ export function HomePage() {
             )}
           </div>
           <div className="p-4 sm:p-6 bg-card border border-border rounded-xl">
-            {/* <Roadmap /> */}
             <RoadmapViewer/>
           </div>
         </section>

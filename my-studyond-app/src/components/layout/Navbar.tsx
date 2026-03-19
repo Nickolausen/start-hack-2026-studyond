@@ -4,11 +4,10 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAppStore } from '@/store/useAppStore';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 
 export function Navbar() {
   const location = useLocation();
-  const { profile, savedThreads, committedThreadId } = useAppStore();
+  const { profile, savedThreads } = useAppStore();
   const unreadCount = savedThreads.filter((t) => !t.isRead).length;
   const isActive = (path: string) => location.pathname === path;
 
@@ -24,25 +23,8 @@ export function Navbar() {
       </Link>
 
       {/* Center: AI Chat CTA — the focal point */}
-      <div className="absolute left-1/2 -translate-x-1/2">
-        <Link to="/chat">
-          <Button
-            className={`
-              bg-ai ai-pulse
-              h-10 px-5 rounded-full gap-2 font-medium text-sm
-              hover:opacity-90 transition-opacity
-              ${isActive('/chat') ? 'opacity-100' : 'opacity-95'}
-            `}
-          >
-            <Sparkles className="size-4" />
-            AI Thesis Advisor
-          </Button>
-        </Link>
-      </div>
-
-      {/* Right: Nav items */}
-      <div className="flex items-center gap-1">
-        <Link to="/">
+      <div className='w-full flex justify-center gap-4'>
+        <Link className='my-auto' to="/">
           <Button
             variant="ghost"
             size="icon"
@@ -58,27 +40,40 @@ export function Navbar() {
           </Button>
         </Link>
 
-        <Link to="/profile">
+        <Link to="/chat">
           <Button
-            variant="ghost"
-            size="icon"
-            className={`rounded-full ${isActive('/profile') ? 'bg-muted' : ''}`}
-            aria-label="Profile"
+            className={`
+              bg-ai ai-pulse
+              h-10 px-5 rounded-full gap-2 font-medium text-sm
+              hover:opacity-90 transition-opacity
+              ${isActive('/chat') ? 'opacity-100' : 'opacity-95'}
+            `}
           >
-            <Avatar className="size-7">
-              <AvatarFallback className="text-xs font-medium bg-primary text-primary-foreground">
-                {profile.firstName[0]}{profile.lastName[0]}
-              </AvatarFallback>
-            </Avatar>
+            <Sparkles className="size-4" />
+            AI Thesis Advisor
           </Button>
         </Link>
 
-        {committedThreadId && (
-          <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 ds-badge ml-1">
-            Committed
-          </Badge>
-        )}
+        <div className='flex items-center'>
+          <Link to="/profile">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`rounded-full ${isActive('/profile') ? 'bg-muted' : ''}`}
+              aria-label="Profile"
+            >
+              <Avatar className="size-7">
+                <AvatarFallback className="text-xs font-medium bg-primary text-primary-foreground">
+                  {profile.firstName[0]}{profile.lastName[0]}
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+          </Link>
+        </div>
+      </div>
 
+      {/* Right: Nav items */}
+      <div className="flex items-center gap-1">
         <div className="ml-1">
           <ThemeToggle />
         </div>
