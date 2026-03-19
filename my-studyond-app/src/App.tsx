@@ -7,6 +7,9 @@ import { ChatbotPage } from './pages/ChatbotPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ThreadPage } from './pages/ThreadPage';
 import { useInitializeApp } from './hooks/useInitializeApp';
+import { useRoadmapStore } from './store/roadmap-store';
+import { useEffect } from 'react';
+import { thesisRoadmap } from './data/thesis-roadmap';
 
 function AppLayout() {
   // Hydrate Zustand store from MongoDB on mount
@@ -14,7 +17,9 @@ function AppLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <Navbar />
+      <div className='hidden md:inline-block'>
+        <Navbar/>
+      </div>
       <main className="flex-1 overflow-hidden">
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -28,6 +33,12 @@ function AppLayout() {
 }
 
 function App() {
+  const setData = useRoadmapStore((s) => s.setData);
+
+  useEffect(() => {
+    setData(thesisRoadmap);
+  }, [setData]);
+  
   return (
     <ThemeProvider>
       <BrowserRouter>

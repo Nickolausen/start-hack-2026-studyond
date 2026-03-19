@@ -1,94 +1,139 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Sparkles, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Roadmap } from '@/components/home/Roadmap';
 import { ThreadInbox } from '@/components/home/ThreadInbox';
 import { useAppStore } from '@/store/useAppStore';
+import { RoadmapViewer } from '@/components/custom/roadmap/roadmap-viewer';
+import { MobileNav } from '@/components/navigation/MobileNav';
+import { NavTabs } from '@/components/navigation/NavTabs';
 
 export function HomePage() {
   const { profile, savedThreads, roadmapSteps } = useAppStore();
-  const committedSteps = roadmapSteps.filter((s) => s.status === 'committed').length;
-  const openSteps = roadmapSteps.filter((s) => s.status === 'open');
-  const hasAnyCommitment = committedSteps > 0;
+  const [activeTab, setActiveTab] = useState<'roadmap' | 'matches'>('roadmap');
+
+  const completedSteps = roadmapSteps.filter((s) => s.status === 'completed').length;
+  const currentStep = roadmapSteps.find((s) => s.status === 'current');
 
   return (
-    <div className="h-full overflow-y-auto page-enter">
-      <div className="max-w-4xl mx-auto px-4 lg:px-8 py-8 space-y-10">
+    <div className="h-full flex flex-col bg-background">
+      {/* Mobile Navigation */}
+      <MobileNav progressTitle={currentStep?.label} />
 
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="ds-title-lg text-foreground">
-              Hi, {profile.firstName} 👋
-            </h1>
-            <p className="ds-body text-muted-foreground mt-1">
-              {openSteps.length > 0
-                ? `Still searching: ${openSteps.map((s) => s.label).join(', ')}`
-                : 'Your thesis setup is complete!'}
-            </p>
-          </div>
-          <Link to="/chat">
-            <Button className="bg-ai ai-pulse rounded-full gap-2 hidden sm:flex">
-              <Sparkles className="size-4" />
-              AI Advisor
-            </Button>
-          </Link>
-        </div>
+      {/* Mobile Tabs */}
+      <NavTabs activeTab={activeTab} onTabChange={setActiveTab} matchCount={savedThreads.length} />
 
-        {/* Progress summary */}
-        <div className="flex items-center gap-3 p-4 bg-muted/40 rounded-xl border border-border">
-          <TrendingUp className="size-5 text-muted-foreground flex-shrink-0" />
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="ds-label text-foreground">Thesis Setup</span>
-              <span className="ds-label text-muted-foreground">
-                {committedSteps} / {roadmapSteps.length} committed
-              </span>
-            </div>
-            <div className="w-full bg-border rounded-full h-1.5 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-700"
-                style={{ width: `${(committedSteps / Math.max(roadmapSteps.length, 1)) * 100}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Roadmap */}
-        <section>
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="ds-title-sm text-foreground">Your Roadmap</h2>
-            {hasAnyCommitment && (
-              <span className="ds-caption text-emerald-600 dark:text-emerald-400 font-medium">
-                {committedSteps} step{committedSteps !== 1 ? 's' : ''} committed
-              </span>
-            )}
-          </div>
-          <div className="p-4 sm:p-6 bg-card border border-border rounded-xl">
-            <Roadmap />
-          </div>
-        </section>
-
-        {/* Saved Threads */}
-        <section className="pb-10">
-          <div className="flex items-center justify-between mb-5">
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto page-enter">
+        <div className="max-w-6xl mx-auto px-6 lg:px-8 py-8">
+          {/* Desktop: Header spans both columns */}
+          <div className="flex items-start justify-between mb-6 md:mb-8">
             <div>
-              <h2 className="ds-title-sm text-foreground">Saved Threads</h2>
-              {savedThreads.length > 0 && (
-                <p className="ds-small text-muted-foreground mt-0.5">
-                  {savedThreads.length} match{savedThreads.length !== 1 ? 'es' : ''} saved
-                </p>
-              )}
+              <h1 className="ds-title-lg text-foreground">
+                Hi, {profile.firstName} 👋
+              </h1>
+              <p className="ds-body text-muted-foreground mt-1">
+                {currentStep
+                  ? `Next up: ${currentStep.label}`
+                  : 'Your thesis journey is on track.'}
+              </p>
             </div>
-            <Link to="/chat">
-              <Button variant="outline" size="sm" className="rounded-full gap-2">
-                <Sparkles className="size-3.5 text-ai-solid" />
-                Find more
-              </Button>
-            </Link>
           </div>
-          <ThreadInbox />
-        </section>
+
+          {/* Two-Column Layout */}
+          <div className="grid grid-cols-12 gap-6">
+            {/* Sidebar: Roadmap (hidden on mobile, shown via tab) */}
+            <aside className="hidden md:flex flex-shrink-0 flex-col md:col-span-3">
+              {/* Progress Summary */}
+              <div className="mb-6 flex items-center w-full gap-3 p-4 bg-card border border-border rounded-lg">
+                <TrendingUp className="size-4 text-muted-foreground flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="ds-label text-foreground text-xs">Progress</span>
+                    <span className="ds-caption text-muted-foreground">
+                      {completedSteps} / {roadmapSteps.length}
+                    </span>
+                  </div>
+                  <div className="w-full bg-border rounded-full h-1 overflow-hidden">
+                    <div
+                      className="h-full bg-ai rounded-full transition-all duration-700"
+                      style={{ width: `${(completedSteps / roadmapSteps.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Roadmap Card */}
+              <div className="p-10 w-full h-fit bg-card border border-border rounded-lg">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="ds-title-cards text-foreground">Roadmap</h2>
+                </div>
+                <RoadmapViewer />
+              </div>
+            </aside>
+
+            {/* Main Content: Threads/Matches */}
+            <main className="flex-1 min-w-0 md:col-span-9 col-span-full">
+              {/* Mobile: Show Roadmap or Threads based on tab */}
+              <div className="md:hidden">
+                {activeTab === 'roadmap' ? (
+                  <div className="space-y-4">
+                    {/* Mobile Roadmap View */}
+                    <div className="p-4 bg-card border border-border rounded-lg">
+                      <div className="mb-4 flex items-center gap-3 p-3 bg-secondary rounded-lg">
+                        <TrendingUp className="size-4 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="ds-label text-foreground text-xs">Progress</span>
+                            <span className="ds-caption text-muted-foreground">
+                              {completedSteps} / {roadmapSteps.length}
+                            </span>
+                          </div>
+                          <div className="w-full bg-border rounded-full h-1 overflow-hidden">
+                            <div
+                              className="h-full bg-ai rounded-full transition-all duration-700"
+                              style={{ width: `${(completedSteps / roadmapSteps.length) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h2 className="ds-title-cards text-foreground">Roadmap</h2>
+                      </div>
+                      <RoadmapViewer />
+                    </div>
+                  </div>
+                ) : (
+                  /* Mobile Matches View */
+                  <div className="space-y-4">
+                    <ThreadInbox />
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop: Always show matches */}
+              <div className="hidden md:block">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h2 className="ds-title-md text-foreground">Saved Matches</h2>
+                    {savedThreads.length > 0 && (
+                      <p className="ds-small text-muted-foreground mt-0.5">
+                        {savedThreads.length} match{savedThreads.length !== 1 ? 'es' : ''} saved
+                      </p>
+                    )}
+                  </div>
+                  <Link to="/chat">
+                    <Button variant="outline" size="sm" className="bg-ai text-primary rounded-full gap-2">
+                      <Sparkles className="size-3.5" />
+                      Find more
+                    </Button>
+                  </Link>
+                </div>
+                <ThreadInbox />
+              </div>
+            </main>
+          </div>
+        </div>
       </div>
     </div>
   );

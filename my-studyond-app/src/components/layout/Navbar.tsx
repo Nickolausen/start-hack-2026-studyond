@@ -4,13 +4,11 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAppStore } from '@/store/useAppStore';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 
 export function Navbar() {
   const location = useLocation();
-  const { profile, savedThreads, roadmapSteps } = useAppStore();
+  const { profile, savedThreads } = useAppStore();
   const unreadCount = savedThreads.filter((t) => !t.isRead).length;
-  const hasCommitment = roadmapSteps.some((s) => s.status === 'committed');
   const isActive = (path: string) => location.pathname === path;
 
   return (
@@ -25,7 +23,23 @@ export function Navbar() {
       </Link>
 
       {/* Center: AI Chat CTA — the focal point */}
-      <div className="absolute left-1/2 -translate-x-1/2">
+      <div className='w-full flex justify-center gap-4'>
+        <Link className='my-auto' to="/">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`rounded-full relative ${isActive('/') ? 'bg-muted' : ''}`}
+            aria-label="Home"
+          >
+            <Home className="size-4 text-foreground" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 size-4 bg-primary text-primary-foreground rounded-full text-[10px] font-medium flex items-center justify-center">
+                {unreadCount}
+              </span>
+            )}
+          </Button>
+        </Link>
+
         <Link to="/chat">
           <Button
             className={`
@@ -39,6 +53,23 @@ export function Navbar() {
             AI Thesis Advisor
           </Button>
         </Link>
+
+        <div className='flex items-center'>
+          <Link to="/profile">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`rounded-full ${isActive('/profile') ? 'bg-muted' : ''}`}
+              aria-label="Profile"
+            >
+              <Avatar className="size-7">
+                <AvatarFallback className="text-xs font-medium bg-primary text-primary-foreground">
+                  {profile.firstName[0]}{profile.lastName[0]}
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Right: Nav items */}
@@ -73,12 +104,6 @@ export function Navbar() {
             </Avatar>
           </Button>
         </Link>
-
-        {hasCommitment && (
-          <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 ds-badge ml-1">
-            Committed
-          </Badge>
-        )}
 
         <div className="ml-1">
           <ThemeToggle />
