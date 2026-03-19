@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "shared": "*",
     "@ai-sdk/anthropic": "^3.0.58",
     "@fontsource-variable/geist": "^5.2.8",
     "@tailwindcss/vite": "^4.2.2",

@@ -1,0 +1,7 @@
+{
+    "workspaces": [
+        "my-studyond-app",
+        "backend",
+        "shared"
+    ]
+}
