@@ -12,8 +12,8 @@ export function HomePage() {
   const { profile, savedThreads, roadmapSteps } = useAppStore();
   const [activeTab, setActiveTab] = useState<'roadmap' | 'matches'>('roadmap');
 
-  const completedSteps = roadmapSteps.filter((s) => s.status === 'completed').length;
-  const currentStep = roadmapSteps.find((s) => s.status === 'current');
+  const completedSteps = roadmapSteps.filter((s) => s.status === 'committed').length;
+  const currentStep = roadmapSteps.find((s) => s.status === 'open');
 
   return (
     <div className="h-full flex flex-col bg-background">

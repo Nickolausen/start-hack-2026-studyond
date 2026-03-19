@@ -135,7 +135,7 @@ export function CommitButton({ thread }: CommitButtonProps) {
 
             <div className="space-y-2">
               {roadmapSteps.map((step) => {
-                const isAlreadyCommitted = step.status === 'completed';
+                const isAlreadyCommitted = step.status === 'committed';
                 const isSelected = selectedStep === step.id;
 
                 return (

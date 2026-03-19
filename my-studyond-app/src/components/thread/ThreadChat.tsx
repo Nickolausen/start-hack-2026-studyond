@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Sparkles, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -86,7 +86,7 @@ export function ThreadChat({ thread }: ThreadChatProps) {
   const initials = thread.card.initials ?? getInitialsFromName(thread.card.name);
   const colorClass = getInitialsColor(initials);
 
-  const threadContext = {
+  const threadContext = useMemo(() => ({
     entityName: thread.card.name,
     entityType: thread.card.entityType,
     entityId: thread.card.entityId,
@@ -99,9 +99,7 @@ export function ThreadChat({ thread }: ThreadChatProps) {
     fieldIds: thread.card.fieldIds,
     supervisorIds: thread.card.supervisorIds,
     expertIds: thread.card.expertIds,
-  };
-
-  const roadmapContext = buildRoadmapContext();
+  }), [thread.card]);
 
   // Mark as read + generate AI-powered suggested questions on mount
   useEffect(() => {
@@ -110,7 +108,7 @@ export function ThreadChat({ thread }: ThreadChatProps) {
     // Only fetch questions if this is the initial state (1 message = just the welcome)
     if (thread.messages.length === 1) {
       setQuestionsLoading(true);
-      generateThreadQuestions(threadContext, roadmapContext)
+      generateThreadQuestions(threadContext, buildRoadmapContext())
         .then((questions) => {
           if (questions.length > 0) setSuggestedQuestions(questions);
         })
@@ -146,7 +144,7 @@ export function ThreadChat({ thread }: ThreadChatProps) {
         messageText,
         threadContext,
         buildSystemContext(),
-        roadmapContext
+        buildRoadmapContext()
       );
 
       const assistantMessage: ThreadMessage = {
@@ -167,7 +165,7 @@ export function ThreadChat({ thread }: ThreadChatProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [input, isLoading, thread.id, threadContext, addMessageToThread, buildSystemContext]);
+  }, [input, isLoading, thread.id, threadContext, addMessageToThread, buildSystemContext, buildRoadmapContext]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {

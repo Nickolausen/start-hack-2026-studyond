@@ -1,17 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, Settings, MessageSquare, Bookmark, LogOut, Star } from 'lucide-react';
+import { Menu, MessageSquare, Bookmark, LogOut, Star } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { useAppStore } from '@/store/useAppStore';
-
 interface MobileNavProps {
   progressTitle?: string;
 }
 
 export function MobileNav({ progressTitle }: MobileNavProps) {
   const [open, setOpen] = useState(false);
-  const { profile } = useAppStore();
 
   const navItems = [
     {

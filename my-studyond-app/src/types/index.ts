@@ -61,7 +61,7 @@ export function computeInitials(name: string): string {
 // ---- Roadmap ----
 
 export type RoadmapStepId = 'field' | 'company' | 'expert' | 'supervisor' | 'topic';
-export type RoadmapStepStatus = "completed" | "current" | "future";
+export type RoadmapStepStatus = "open" | "committed";
 
 export interface RoadmapStep {
   id: RoadmapStepId;

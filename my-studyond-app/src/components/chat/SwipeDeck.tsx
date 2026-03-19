@@ -163,13 +163,13 @@ export function SwipeDeck({ cards, onDeckEmpty }: SwipeDeckProps) {
       <div className="relative" style={{ height: '520px' }}>
         <AnimatePresence mode="popLayout">
           {visibleCards.map((card, stackIndex) => {
-            const isTop = stackIndex === visibleCards.length - 1;
+            const isTop = stackIndex === 0;
             return (
               <DraggableCard
                 key={card.id}
                 card={card}
                 isTop={isTop}
-                stackIndex={visibleCards.length - 1 - stackIndex}
+                stackIndex={stackIndex}
                 onLike={handleLike}
                 onPass={handlePass}
               />
