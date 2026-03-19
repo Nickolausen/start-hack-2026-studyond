@@ -43,7 +43,7 @@ export function HomePage() {
           {/* Two-Column Layout */}
           <div className="grid grid-cols-12 gap-6">
             {/* Sidebar: Roadmap (hidden on mobile, shown via tab) */}
-            <aside className="hidden md:flex flex-shrink-0 flex-col md:col-span-9">
+            <aside className="hidden md:flex flex-shrink-0 flex-col md:col-span-3">
               {/* Progress Summary */}
               <div className="mb-6 flex items-center w-full gap-3 p-4 bg-card border border-border rounded-lg">
                 <TrendingUp className="size-4 text-muted-foreground flex-shrink-0" />
@@ -78,7 +78,7 @@ export function HomePage() {
             </aside>
 
             {/* Main Content: Threads/Matches */}
-            <main className="flex-1 min-w-0 md:col-span-3 col-span-full">
+            <main className="flex-1 min-w-0 md:col-span-9 col-span-full">
               {/* Mobile: Show Roadmap or Threads based on tab */}
               <div className="md:hidden">
                 {activeTab === 'roadmap' ? (
@@ -133,7 +133,7 @@ export function HomePage() {
                     )}
                   </div>
                   <Link to="/chat">
-                    <Button variant="outline" size="sm" className="rounded-full gap-2">
+                    <Button variant="outline" size="sm" className="bg-ai text-primary rounded-full gap-2">
                       <Sparkles className="size-3.5" />
                       Find more
                     </Button>
