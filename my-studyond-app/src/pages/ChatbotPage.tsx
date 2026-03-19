@@ -20,9 +20,9 @@ export function ChatbotPage() {
     setMobileView('deck');
   };
 
-  const loadDemoMatches = () => {
-    handleMatchesReceived(MOCK_MATCH_CARDS);
-  };
+  // const loadDemoMatches = () => {
+  //   handleMatchesReceived(MOCK_MATCH_CARDS);
+  // };
 
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col">
