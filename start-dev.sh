@@ -1,4 +1,4 @@
-#!/usr/env/bin bash
+#!/usr/bin/env bash
 # Studyond — Start Development Environment
 # Starts both the Express API server and Vite frontend in parallel
 
