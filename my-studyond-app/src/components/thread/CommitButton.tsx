@@ -96,7 +96,7 @@ export function CommitButton({ threadId }: CommitButtonProps) {
             <div className="flex items-start gap-3">
               <Sparkles className="size-4 text-ai-solid mt-0.5 flex-shrink-0" />
               <div>
-                <p className="ds-label mb-1">Switch your commitment?</p>
+                <p className="ds-label mb-1 text-foreground">Switch your commitment?</p>
                 <p className="ds-small text-muted-foreground mb-3">
                   You're already committed to another thesis. Committing here will update your previous commitment.
                 </p>

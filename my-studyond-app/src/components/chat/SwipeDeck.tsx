@@ -133,7 +133,7 @@ export function SwipeDeck({ cards, onDeckEmpty }: SwipeDeckProps) {
           <CheckCircle className="size-8 text-emerald-500" />
         </div>
         <div>
-          <h3 className="ds-title-sm mb-1">All done!</h3>
+          <h3 className="ds-title-sm mb-1 text-foreground">All done!</h3>
           <p className="ds-small text-muted-foreground">
             You reviewed all {cards.length} matches.
             {likedCount > 0 && ` You liked ${likedCount} — check your inbox.`}

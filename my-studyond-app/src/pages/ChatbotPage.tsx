@@ -77,7 +77,7 @@ export function ChatbotPage() {
             <div className="size-7 rounded-full bg-ai flex items-center justify-center">
               <Sparkles className="size-3.5 text-white" />
             </div>
-            <span className="ds-title-cards">AI Thesis Advisor</span>
+            <span className="ds-title-cards text-foreground">AI Thesis Advisor</span>
             {!deckActive && (
               <button
                 onClick={loadDemoMatches}
@@ -108,7 +108,7 @@ export function ChatbotPage() {
             >
               <div className="flex-shrink-0 px-4 py-3 border-b border-border flex items-center gap-2 bg-background">
                 <Sparkles className="size-4 text-ai-solid" />
-                <span className="ds-title-cards">Your Matches</span>
+                <span className="ds-title-cards text-foreground">Your Matches</span>
                 <span className="ds-badge text-muted-foreground ml-1">
                   {matches.length} found
                 </span>
@@ -132,7 +132,7 @@ export function ChatbotPage() {
             <div className="size-20 rounded-3xl bg-gradient-to-br from-purple-100 to-blue-100 dark:from-purple-950/40 dark:to-blue-950/40 flex items-center justify-center mb-5">
               <Sparkles className="size-9 text-ai-solid" />
             </div>
-            <h3 className="ds-title-sm mb-2">Your matches will appear here</h3>
+            <h3 className="ds-title-sm mb-2 text-foreground">Your matches will appear here</h3>
             <p className="ds-body text-muted-foreground max-w-xs">
               Describe your thesis idea in the chat and I'll generate a personalized swipe deck of matching companies, supervisors, and topics.
             </p>

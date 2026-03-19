@@ -70,7 +70,7 @@ export function ProfilePage() {
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <h1 className="ds-title-md">
+            <h1 className="ds-title-md text-foreground">
               {localProfile.firstName} {localProfile.lastName}
             </h1>
             <div className="flex items-center gap-3 mt-1 flex-wrap">
@@ -100,7 +100,7 @@ export function ProfilePage() {
 
         {/* Edit Form */}
         <section>
-          <h2 className="ds-title-sm mb-4">Edit Profile</h2>
+          <h2 className="ds-title-sm mb-4 text-foreground">Edit Profile</h2>
           <ProfileEditor profile={localProfile} onChange={handleChange} />
         </section>
 

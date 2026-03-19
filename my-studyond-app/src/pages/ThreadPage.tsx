@@ -95,7 +95,7 @@ export function ThreadPage() {
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <h2 className="ds-title-sm font-semibold leading-tight">{card.name}</h2>
+              <h2 className="ds-title-sm font-semibold leading-tight text-foreground">{card.name}</h2>
               <p className="ds-small text-muted-foreground mt-0.5">{card.subtitle}</p>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-muted-foreground ds-badge">
@@ -114,7 +114,7 @@ export function ThreadPage() {
           {card.topicTitle && (
             <div className="p-3 rounded-lg bg-muted/50 border border-border">
               <p className="ds-caption text-muted-foreground mb-0.5">Topic</p>
-              <p className="ds-label">{card.topicTitle}</p>
+              <p className="ds-label text-foreground">{card.topicTitle}</p>
             </div>
           )}
 

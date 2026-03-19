@@ -183,7 +183,7 @@ export function ThreadChat({ thread }: ThreadChatProps) {
                 <button
                   key={s}
                   onClick={() => setInput(s)}
-                  className="text-left px-3.5 py-2 rounded-xl border border-border bg-background hover:bg-muted transition-colors ds-small"
+                  className="text-left px-3.5 py-2 rounded-xl border border-border bg-background hover:bg-muted transition-colors ds-small text-foreground"
                 >
                   {s}
                 </button>

@@ -64,7 +64,7 @@ export function ThreadInbox() {
         <div className="size-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
           <MessageCircle className="size-7 text-muted-foreground" />
         </div>
-        <h3 className="ds-title-sm mb-2">No saved threads yet</h3>
+        <h3 className="ds-title-sm mb-2 text-foreground">No saved threads yet</h3>
         <p className="ds-body text-muted-foreground max-w-sm mb-6">
           Like a match in the AI Advisor to save it here. Each saved match becomes a dedicated chat thread.
         </p>

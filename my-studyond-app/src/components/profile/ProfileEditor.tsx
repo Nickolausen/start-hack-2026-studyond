@@ -44,7 +44,7 @@ function TagInput({
 
   return (
     <div className="space-y-2">
-      <label className="ds-label">{label}</label>
+      <label className="ds-label text-foreground">{label}</label>
       <div className="flex flex-wrap gap-1.5 p-2.5 min-h-[44px] border border-input rounded-lg bg-background focus-within:ring-1 focus-within:ring-ring">
         {values.map((tag) => (
           <span
@@ -81,19 +81,19 @@ export function ProfileEditor({ profile, onChange }: ProfileEditorProps) {
       {/* Name row */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <label className="ds-label">First Name</label>
+          <label className="ds-label text-foreground">First Name</label>
           <Input
             value={profile.firstName}
             onChange={(e) => onChange({ firstName: e.target.value })}
-            className="rounded-lg"
+            className="rounded-lg text-foreground"
           />
         </div>
         <div className="space-y-1.5">
-          <label className="ds-label">Last Name</label>
+          <label className="ds-label text-foreground">Last Name</label>
           <Input
             value={profile.lastName}
             onChange={(e) => onChange({ lastName: e.target.value })}
-            className="rounded-lg"
+            className="rounded-lg text-foreground"
           />
         </div>
       </div>
@@ -101,31 +101,31 @@ export function ProfileEditor({ profile, onChange }: ProfileEditorProps) {
       {/* University + Program */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <label className="ds-label">University</label>
+          <label className="ds-label text-foreground">University</label>
           <Input
             value={profile.university}
             onChange={(e) => onChange({ university: e.target.value })}
-            className="rounded-lg"
+            className="rounded-lg text-foreground"
           />
         </div>
         <div className="space-y-1.5">
-          <label className="ds-label">Study Program</label>
+          <label className="ds-label text-foreground">Study Program</label>
           <Input
             value={profile.studyProgram}
             onChange={(e) => onChange({ studyProgram: e.target.value })}
-            className="rounded-lg"
+            className="rounded-lg text-foreground"
           />
         </div>
       </div>
 
       {/* About */}
       <div className="space-y-1.5">
-        <label className="ds-label">About</label>
+          <label className="ds-label text-foreground">About</label>
         <Textarea
           value={profile.about}
           onChange={(e) => onChange({ about: e.target.value })}
           placeholder="Tell us about yourself, your research interests, and what you're looking for..."
-          className="rounded-lg min-h-[100px] resize-none"
+          className="rounded-lg min-h-[100px] resize-none text-foreground"
         />
       </div>
 

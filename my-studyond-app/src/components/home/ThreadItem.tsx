@@ -68,7 +68,7 @@ export function ThreadItem({ thread, isCommitted }: ThreadItemProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-0.5">
             <div className="flex items-center gap-2 min-w-0">
-              <span className={`ds-label truncate ${!thread.isRead ? 'font-semibold' : ''}`}>
+              <span className={`ds-label truncate text-foreground ${!thread.isRead ? 'font-semibold' : ''}`}>
                 {thread.card.name}
               </span>
               {isCommitted && (

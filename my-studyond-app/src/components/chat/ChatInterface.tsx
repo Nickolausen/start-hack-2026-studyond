@@ -148,7 +148,7 @@ export function ChatInterface({ onMatchesReceived }: ChatInterfaceProps) {
                   <button
                     key={prompt}
                     onClick={() => handleSuggestedPrompt(prompt)}
-                    className="text-left px-3.5 py-2.5 rounded-xl border border-border bg-background hover:bg-muted hover:border-foreground/20 transition-colors duration-150 ds-small"
+                    className="text-left px-3.5 py-2.5 rounded-xl border border-border bg-background hover:bg-muted hover:border-foreground/20 transition-colors duration-150 ds-small text-foreground"
                   >
                     {prompt}
                   </button>

@@ -17,7 +17,7 @@ export function HomePage() {
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="ds-title-lg">
+            <h1 className="ds-title-lg text-foreground">
               Hi, {profile.firstName} 👋
             </h1>
             <p className="ds-body text-muted-foreground mt-1">
@@ -39,7 +39,7 @@ export function HomePage() {
           <TrendingUp className="size-5 text-muted-foreground flex-shrink-0" />
           <div className="flex-1">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="ds-label">Thesis Journey</span>
+              <span className="ds-label text-foreground">Thesis Journey</span>
               <span className="ds-label text-muted-foreground">
                 {completedSteps} / {roadmapSteps.length} steps
               </span>
@@ -56,7 +56,7 @@ export function HomePage() {
         {/* Roadmap */}
         <section>
           <div className="flex items-center justify-between mb-5">
-            <h2 className="ds-title-sm">Your Roadmap</h2>
+            <h2 className="ds-title-sm text-foreground">Your Roadmap</h2>
             {committedThreadId && (
               <span className="ds-caption text-emerald-600 dark:text-emerald-400 font-medium">
                 Supervisor secured
@@ -72,7 +72,7 @@ export function HomePage() {
         <section className="pb-10">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="ds-title-sm">Saved Threads</h2>
+              <h2 className="ds-title-sm text-foreground">Saved Threads</h2>
               {savedThreads.length > 0 && (
                 <p className="ds-small text-muted-foreground mt-0.5">
                   {savedThreads.length} match{savedThreads.length !== 1 ? 'es' : ''} saved

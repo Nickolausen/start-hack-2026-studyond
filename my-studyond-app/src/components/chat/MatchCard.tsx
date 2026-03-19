@@ -78,7 +78,7 @@ export function MatchCard({ card, isTop = false }: MatchCardProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="ds-title-cards font-semibold leading-tight">{card.name}</h3>
+              <h3 className="ds-title-cards font-semibold leading-tight text-foreground">{card.name}</h3>
               <p className="ds-small text-muted-foreground mt-0.5 truncate">{card.subtitle}</p>
             </div>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-muted-foreground ds-badge flex-shrink-0">
