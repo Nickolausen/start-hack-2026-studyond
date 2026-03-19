@@ -138,6 +138,7 @@ threadsRouter.patch('/:threadId/commit', async (req: Request, res: Response) => 
       thread: updatedThread,
       roadmapSteps: result.updatedSteps,
       autoCommitted: result.autoCommitted,
+      projectId: result.projectId ?? null,
     });
   } catch (error) {
     console.error('[Threads] PATCH commit error:', error);

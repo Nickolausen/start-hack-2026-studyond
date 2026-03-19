@@ -2,11 +2,12 @@ import { Link } from 'react-router-dom';
 import { Sparkles, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Roadmap } from '@/components/home/Roadmap';
+import { ProjectCard } from '@/components/home/ProjectCard';
 import { ThreadInbox } from '@/components/home/ThreadInbox';
 import { useAppStore } from '@/store/useAppStore';
 
 export function HomePage() {
-  const { profile, savedThreads, roadmapSteps } = useAppStore();
+  const { profile, savedThreads, roadmapSteps, activeProject } = useAppStore();
   const committedSteps = roadmapSteps.filter((s) => s.status === 'committed').length;
   const openSteps = roadmapSteps.filter((s) => s.status === 'open');
   const hasAnyCommitment = committedSteps > 0;
@@ -53,6 +54,14 @@ export function HomePage() {
             </div>
           </div>
         </div>
+
+        {/* Active Project */}
+        {activeProject && (
+          <section>
+            <h2 className="ds-title-sm text-foreground mb-5">Your Thesis Project</h2>
+            <ProjectCard />
+          </section>
+        )}
 
         {/* Roadmap */}
         <section>

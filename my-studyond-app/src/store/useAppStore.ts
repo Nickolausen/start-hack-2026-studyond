@@ -9,6 +9,8 @@ import type {
   RoadmapStepId,
   AutoCommit,
   CommitConflict,
+  ThesisProject,
+  ProjectState,
 } from '@/types';
 import { MOCK_STUDENT, MOCK_PROFILE_TAGS } from '@/data/mockStudent';
 import { INITIAL_ROADMAP_STEPS } from '@/data/roadmapSteps';
@@ -19,6 +21,8 @@ import {
   uncommitThread as apiUncommitThread,
   addThreadMessage as apiAddThreadMessage,
   markThreadRead as apiMarkThreadRead,
+  fetchProjects as apiFetchProjects,
+  updateProject as apiUpdateProject,
 } from '@/api';
 
 // The single demo student ID used throughout the app
@@ -67,6 +71,9 @@ interface AppState {
   pendingCommitThreadId: string | null;
   pendingCommitStepId: RoadmapStepId | null;
 
+  // Projects
+  activeProject: ThesisProject | null;
+
   // UI
   hasExploredTopics: boolean;
 
@@ -87,6 +94,10 @@ interface AppState {
   uncommitThread: (threadId: string) => void;
   clearPendingConflicts: () => void;
   forceCommit: () => void;
+
+  setActiveProject: (project: ThesisProject | null) => void;
+  updateProjectState: (projectId: string, state: ProjectState) => void;
+  loadProjects: () => Promise<void>;
 
   setRoadmapSteps: (steps: RoadmapStep[]) => void;
   hydrateFromDB: (data: {
@@ -123,6 +134,7 @@ export const useAppStore = create<AppState>()(
       pendingConflicts: null,
       pendingCommitThreadId: null,
       pendingCommitStepId: null,
+      activeProject: null,
       hasExploredTopics: false,
 
       // ---- Profile ----
@@ -199,6 +211,37 @@ export const useAppStore = create<AppState>()(
           ),
         }));
         bgSync('markThreadRead', apiMarkThreadRead(STUDENT_ID, threadId));
+      },
+
+      // ---- Projects ----
+
+      setActiveProject: (project) => set({ activeProject: project }),
+
+      updateProjectState: async (projectId, state) => {
+        const project = get().activeProject;
+        if (!project || project.id !== projectId) return;
+        // Optimistic update
+        set({ activeProject: { ...project, state } });
+        try {
+          const updated = await apiUpdateProject('student-01', projectId, { state });
+          set({ activeProject: updated });
+        } catch (err) {
+          console.warn('[Store] Project update failed:', err);
+          set({ activeProject: project }); // rollback
+        }
+      },
+
+      loadProjects: async () => {
+        try {
+          const projects = await apiFetchProjects('student-01');
+          // Set the most recent active project (not completed/withdrawn/rejected/canceled)
+          const active = projects.find(p =>
+            !['completed', 'withdrawn', 'rejected', 'canceled'].includes(p.state)
+          ) ?? projects[0] ?? null;
+          set({ activeProject: active });
+        } catch (err) {
+          console.warn('[Store] Failed to load projects:', err);
+        }
       },
 
       // ---- Commit / Uncommit (dependency-aware) ----
@@ -401,6 +444,7 @@ Objectives: ${profile.objectives.join(', ')}${
         savedThreads: s.savedThreads,
         roadmapSteps: s.roadmapSteps,
         hasExploredTopics: s.hasExploredTopics,
+        activeProject: s.activeProject,
       }),
     }
   )

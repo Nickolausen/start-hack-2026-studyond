@@ -52,6 +52,9 @@ export function useInitializeApp() {
           `[App] Hydrated from MongoDB — ${threads.length} thread(s), ` +
           `${student.roadmapSteps.filter((s) => s.status === 'committed').length} step(s) committed`
         );
+
+        // Load thesis projects after hydration
+        useAppStore.getState().loadProjects();
       } catch (err) {
         console.warn('[App] Could not reach API, using localStorage state:', err);
       }

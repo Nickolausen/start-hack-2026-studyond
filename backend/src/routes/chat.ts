@@ -8,7 +8,6 @@ import {
   type UIMessage,
 } from 'ai';
 import { Student, type RoadmapStepDoc } from '../models/Student.js';
-import { Thread, type ThreadDoc } from '../models/Thread.js';
 import {
   searchDatabaseTool,
   getEntityDetailsTool,
@@ -18,88 +17,74 @@ import {
 
 export const chatRouter = Router();
 
-// ---- System prompt ----
+// ---- System prompt (tighter, more directive) ----
 
-const SEARCH_SYSTEM_PROMPT = `You are Studyond's AI thesis advisor — warm, direct, and knowledgeable about Swiss academia and industry.
+const SEARCH_SYSTEM_PROMPT = `You are Studyond's AI thesis advisor — warm, direct, knowledgeable about Swiss academia and industry.
 
-## Your Role
-Help students navigate the thesis journey: choosing a field, finding companies, experts, supervisors, and ultimately a thesis topic.
-
-## Thesis Journey Dependency Graph
-The student's roadmap has 5 steps with strict dependencies:
-  - Field → Company → Expert → Topic  (industry path)
-  - Field → Supervisor → Topic         (academic path)
-  - Or a mix: Company → Expert → Topic, Supervisor → Topic, or directly to Topic
-
-When a student commits to an entity, parent dependencies are auto-committed.
-When they uncommit an entity, downstream dependents are cascaded-uncommitted.
+## Rules
+1. ALWAYS call searchDatabase before generating match cards. Never skip this.
+2. Only use entity IDs returned by tool results. NEVER invent or guess IDs.
+3. Copy entity metadata (fieldIds, companyId, supervisorIds, expertIds) EXACTLY as returned by the search tool. Do NOT modify or omit these arrays.
+4. Use listFields when the student is starting out or needs to choose a field.
+5. Use getRoadmapState to check committed steps before recommending.
+6. Use getEntityDetails only when the student asks for deeper info on one entity.
+7. One or two tool calls per turn is enough.
 
 ## Guided Routing
-- For NEW students (no committed steps): Default to suggesting they start by choosing a **Field** of study. Use listFields to show available fields. This is the most productive starting point.
-- If they already have a Field: Suggest Companies OR Supervisors as next steps (depending on their objectives).
-- If they have a Company: Suggest Experts at that company.
-- If they have a Supervisor or Expert: Suggest Topics.
-- ALWAYS check the student's current roadmap state to tailor recommendations.
-- The student CAN skip ahead (e.g. directly search for topics) — don't block them, but mention what parent steps will be auto-committed.
+- No committed steps → suggest choosing a Field first (use listFields).
+- Has Field → suggest Companies or Supervisors.
+- Has Company → suggest Experts at that company.
+- Has Supervisor or Expert → suggest Topics.
+- Student CAN skip ahead — don't block them.
 
-## Workflow
-1. When the student asks about thesis opportunities, ALWAYS call searchDatabase first.
-2. Use listFields when the student needs to choose a field or is just starting.
-3. Use getRoadmapState to check what they've already committed before recommending.
-4. Use only entity IDs returned by tools — never invent IDs.
-5. After searching, output a short encouraging 1-2 sentence response, then the match cards JSON block.
-6. Use getEntityDetails for deeper information about a specific entity.
-7. Be efficient — one or two tool calls per turn is enough.
+## Filtering by Committed Steps
+When the student has committed steps, their search constraints are MANDATORY.
+- If fieldId constraint is given, ALWAYS pass it to searchDatabase.
+- If companyId constraint is given, ALWAYS pass it when searching experts/topics.
+- NEVER show entities outside the committed field unless the student explicitly asks to explore other fields.
+- If all steps are committed (topic found), congratulate and do NOT generate new match cards.
 
-## Match Card Format
-After your text response, output a fenced JSON block like this:
+## Response Format
+After your short 1–2 sentence text response, output EXACTLY this JSON block:
 
 \`\`\`json
 {
   "matches": [
     {
-      "id": "match-<unique-suffix>",
-      "entityType": "topic",
-      "entityId": "topic-07",
-      "name": "Swisscom",
-      "subtitle": "Telecommunications · IT Services",
+      "id": "match-<unique>",
+      "entityType": "field" | "topic" | "supervisor" | "company" | "expert",
+      "entityId": "<ID from tool results>",
+      "name": "<display name>",
+      "subtitle": "<short descriptor>",
       "imageUrl": null,
-      "compatibilityScore": 4.2,
-      "description": "2-3 sentences explaining why this is a great match.",
-      "tags": ["#FederatedLearning", "#Hybrid", "#Privacy"],
-      "topicTitle": "Federated Learning for Telecom Network Optimization",
-      "university": null,
-      "companyId": "company-04",
-      "fieldIds": ["field-01", "field-03"],
-      "supervisorIds": [],
-      "expertIds": ["expert-07"]
+      "compatibilityScore": <1.0-5.0>,
+      "description": "<2-3 sentences why this matches the student>",
+      "tags": ["#Tag1", "#Tag2"],
+      "topicTitle": "<thesis title or null>",
+      "university": "<university name or null>",
+      "companyId": "<from DB or null>",
+      "fieldIds": ["<from DB>"],
+      "supervisorIds": ["<from DB>"],
+      "expertIds": ["<from DB>"]
     }
   ]
 }
 \`\`\`
 
 ## Match Card Rules
-- Generate 5-8 cards per response, sorted by compatibilityScore DESCENDING
-- compatibilityScore: 1.0–5.0 scale with meaningful differentiation
-  * 4.5–5.0 = exceptional alignment
-  * 3.5–4.4 = good match
-  * 2.5–3.4 = moderate match
-  * 1.5–2.4 = weak match
-  NEVER give every card above 4.0.
-- entityType: "field", "topic", "supervisor", "company", or "expert"
-- entityId MUST be a real ID from tool results
-- For field cards: name = field name; no topicTitle
-- For topic cards: name = company/university name; topicTitle = thesis title; include companyId, supervisorIds, expertIds, fieldIds from DB
-- For supervisor cards: name = "Prof. Dr. First Last"; university = university name; include fieldIds
-- For company cards: name = company name; topicTitle = null
-- For expert cards: name = "First Last"; subtitle = "Title at Company"; include companyId, fieldIds
-- tags: specific hashtags like #NLP, #Remote, #Fintech, #Python
-- descriptions must reference the student's specific skills and interests
-- ALWAYS output the JSON block — the UI depends on it
-- ALWAYS include fieldIds, companyId, supervisorIds, expertIds when available from DB data — the commit engine needs these for dependency resolution
-- Tone: warm, peer-like. Short sentences.`;
+- 5–8 cards per response, sorted by compatibilityScore DESC.
+- Score spread: 4.5–5.0 exceptional, 3.5–4.4 good, 2.5–3.4 moderate, 1.5–2.4 weak. Do NOT give every card above 4.0.
+- entityId MUST come from tool results.
+- field cards: name = field name, topicTitle = null.
+- topic cards: name = company/university name, topicTitle = thesis title, include companyId/supervisorIds/expertIds/fieldIds from DB.
+- supervisor cards: name = "Prof. Dr. First Last", university = university name, include fieldIds.
+- company cards: name = company name, topicTitle = null.
+- expert cards: name = "First Last", subtitle = "Title at Company", include companyId/fieldIds.
+- tags: specific hashtags (#NLP, #Remote, #Fintech, #Python).
+- ALWAYS output the JSON block — the UI depends on it.
+- ALWAYS include fieldIds, companyId, supervisorIds, expertIds when available — the commit engine needs them.`;
 
-// ---- Build enriched context from DB ----
+// ---- Build enriched context with MANDATORY search constraints ----
 
 async function buildEnrichedContext(baseContext: string, studentId: string): Promise<string> {
   try {
@@ -107,49 +92,102 @@ async function buildEnrichedContext(baseContext: string, studentId: string): Pro
     if (!student) return baseContext;
 
     const steps = student.roadmapSteps as RoadmapStepDoc[];
+
+    // Build a map of committed steps keyed by step id
+    const committedMap: Record<string, { entityId: string; entityName: string }> = {};
+    for (const step of steps) {
+      if (step.status === 'committed' && step.committedEntityId) {
+        committedMap[step.id] = {
+          entityId: step.committedEntityId,
+          entityName: step.committedEntityName ?? step.committedEntityId,
+        };
+      }
+    }
+
     const committedSteps = steps.filter(
-      (s: RoadmapStepDoc) => s.status === 'committed' && s.committedEntityId
+      (s: RoadmapStepDoc) => s.status === 'committed' && s.committedEntityId,
     );
 
     if (committedSteps.length === 0 && !baseContext) {
       return `Student ID: ${studentId}\nNo committed steps yet — this is a fresh start. Guide them to choose a Field first.`;
     }
 
-    const threads = committedSteps
-      .filter((s: RoadmapStepDoc) => s.committedThreadId)
-      .map((s: RoadmapStepDoc) => s.committedThreadId!);
+    // ---- Build HARD constraints from committed steps ----
+    const constraints: string[] = [];
 
-    const threadDocs: ThreadDoc[] = threads.length > 0
-      ? await Thread.find({ id: { $in: threads } }).lean()
-      : [];
-    const threadMap = new Map(threadDocs.map((t: ThreadDoc) => [t.id, t]));
+    if (committedMap.field) {
+      constraints.push(
+        `MANDATORY: Student committed to field "${committedMap.field.entityName}" (${committedMap.field.entityId}). When calling searchDatabase, you MUST pass fieldId="${committedMap.field.entityId}". Do NOT show results outside this field.`,
+      );
+    }
+    if (committedMap.company) {
+      constraints.push(
+        `MANDATORY: Student committed to company "${committedMap.company.entityName}" (${committedMap.company.entityId}). When searching for experts or topics at this company, pass companyId="${committedMap.company.entityId}".`,
+      );
+    }
+    if (committedMap.supervisor) {
+      constraints.push(
+        `Student already has supervisor "${committedMap.supervisor.entityName}". Prefer topics supervised by this person. Do NOT suggest other supervisors unless asked.`,
+      );
+    }
+    if (committedMap.expert) {
+      constraints.push(
+        `Student already has expert "${committedMap.expert.entityName}". Do NOT suggest other experts unless asked.`,
+      );
+    }
+    if (committedMap.topic) {
+      constraints.push(
+        `Student already committed to topic "${committedMap.topic.entityName}". Their thesis journey is complete — congratulate them and help with next steps.`,
+      );
+    }
 
+    // ---- Build next-step suggestion ----
+    const openStepIds = steps.filter((s: RoadmapStepDoc) => s.status === 'open').map((s: RoadmapStepDoc) => s.id);
+    let nextStepHint = '';
+
+    if (openStepIds.length > 0) {
+      if (!committedMap.field && openStepIds.includes('field')) {
+        nextStepHint = 'The student has not chosen a field yet. Start by suggesting fields (use listFields tool).';
+      } else if (committedMap.field && !committedMap.company && !committedMap.supervisor && openStepIds.includes('company')) {
+        nextStepHint = `Suggest companies or supervisors in the "${committedMap.field.entityName}" field. Use searchDatabase with fieldId="${committedMap.field.entityId}".`;
+      } else if (committedMap.company && !committedMap.expert && openStepIds.includes('expert')) {
+        nextStepHint = `Suggest experts at "${committedMap.company.entityName}". Use searchDatabase with companyId="${committedMap.company.entityId}" and entityTypes=["expert"].`;
+      } else if ((committedMap.supervisor || committedMap.expert) && !committedMap.topic && openStepIds.includes('topic')) {
+        nextStepHint = `Suggest thesis topics. Use searchDatabase with fieldId="${committedMap.field?.entityId ?? ''}"${committedMap.company ? ` and companyId="${committedMap.company.entityId}"` : ''}.`;
+      }
+    }
+
+    // ---- Build committed/open step listings ----
     const commitLines = committedSteps
       .map((step: RoadmapStepDoc) => {
-        const t = step.committedThreadId ? threadMap.get(step.committedThreadId) : null;
-        const entityDetail = step.committedEntityName ?? step.committedEntityId ?? 'unknown';
-        const threadDetail = t?.card.topicTitle
-          ? ` — Topic: "${t.card.topicTitle}"`
-          : '';
-        return `  ✓ ${step.label}: ${entityDetail} (${step.id}: ${step.committedEntityId})${threadDetail}`;
+        const name = step.committedEntityName ?? step.committedEntityId ?? 'unknown';
+        return `  - ${step.label}: ${name} (${step.id}: ${step.committedEntityId})`;
       })
       .join('\n');
 
     const openSteps = steps
       .filter((s: RoadmapStepDoc) => s.status === 'open')
-      .map((s: RoadmapStepDoc) => `  ○ ${s.label} (${s.id})`);
+      .map((s: RoadmapStepDoc) => `  - ${s.label} (${s.id})`);
 
+    // ---- Assemble the context string ----
     let context = baseContext || '';
-    context += `\n\n## Current Roadmap State`;
-    context += `\nStudent ID: ${studentId}`;
+    context += `\n\nStudent ID: ${studentId}`;
+
+    if (constraints.length > 0) {
+      context += `\n\n## SEARCH CONSTRAINTS (MANDATORY — DO NOT IGNORE)\n${constraints.join('\n')}`;
+    }
+
+    if (nextStepHint) {
+      context += `\n\n## Suggested Next Step\n${nextStepHint}`;
+    }
 
     if (commitLines) {
-      context += `\nCommitted:\n${commitLines}`;
+      context += `\n\n## Committed Steps\n${commitLines}`;
     }
+
     if (openSteps.length > 0) {
-      context += `\nStill searching:\n${openSteps.join('\n')}`;
+      context += `\n\n## Open Steps\n${openSteps.join('\n')}`;
     }
-    context += `\nTailor recommendations to complement existing decisions. Suggest the most logical next step.`;
 
     return context;
   } catch (err) {
@@ -191,6 +229,7 @@ chatRouter.post('/', async (req: Request, res: Response) => {
 
     const result = streamText({
       model: mistral('mistral-large-latest'),
+      temperature: 0.3,
       system: systemPrompt,
       messages: coreMessages,
       maxOutputTokens: 2500,

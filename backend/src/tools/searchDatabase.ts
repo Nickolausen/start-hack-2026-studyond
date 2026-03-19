@@ -6,6 +6,7 @@ import { Company, type CompanyDoc } from '../models/Company.js';
 import { Expert, type ExpertDoc } from '../models/Expert.js';
 import { Field, type FieldDoc } from '../models/Field.js';
 import { University, type UniversityDoc } from '../models/University.js';
+import { Student } from '../models/Student.js';
 
 // ---- Result types ----
 
@@ -48,6 +49,22 @@ type SearchResult = {
   experts: ExpertResult[];
 };
 
+// ---- Batch helpers ----
+
+async function batchCompanyNames(ids: string[]): Promise<Record<string, string>> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return {};
+  const docs: CompanyDoc[] = await Company.find({ id: { $in: unique } }).lean();
+  return Object.fromEntries(docs.map((c: CompanyDoc) => [c.id, c.name]));
+}
+
+async function batchUniversityNames(ids: string[]): Promise<Record<string, string>> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return {};
+  const docs: UniversityDoc[] = await University.find({ id: { $in: unique } }).lean();
+  return Object.fromEntries(docs.map((u: UniversityDoc) => [u.id, u.name]));
+}
+
 // ---- Main search tool ----
 
 export const searchDatabaseTool = tool({
@@ -87,15 +104,24 @@ Returns real data sorted by relevance. Use entityTypes to narrow the search.`,
 
     const result: SearchResult = { fields: [], topics: [], supervisors: [], companies: [], experts: [] };
 
-    // ---- Fields ----
+    // ---- Fields (use $text, fallback to regex) ----
     if (types.includes('field')) {
       try {
-        const regex = new RegExp(query.split(/\s+/).join('|'), 'i');
-        const raw: FieldDoc[] = await Field.find({ name: regex }).limit(limit).lean();
+        const raw: FieldDoc[] = await Field.find(
+          { $text: { $search: query } },
+          scoreProjection,
+        ).sort(scoreSort).limit(limit).lean();
         result.fields = raw.map((f: FieldDoc) => ({ id: f.id, name: f.name }));
-      } catch {
-        const all: FieldDoc[] = await Field.find({}).limit(limit).lean();
-        result.fields = all.map((f: FieldDoc) => ({ id: f.id, name: f.name }));
+      } catch (err) {
+        console.warn('[SearchDB] Field $text search failed, falling back to regex', err);
+        try {
+          const regex = new RegExp(query.split(/\s+/).join('|'), 'i');
+          const raw: FieldDoc[] = await Field.find({ name: regex }).limit(limit).lean();
+          result.fields = raw.map((f: FieldDoc) => ({ id: f.id, name: f.name }));
+        } catch (regexErr) {
+          console.warn('[SearchDB] Field regex fallback failed', regexErr);
+          result.fields = [];
+        }
       }
     }
 
@@ -109,19 +135,14 @@ Returns real data sorted by relevance. Use entityTypes to narrow the search.`,
 
         const raw: TopicDoc[] = await Topic.find(filter, scoreProjection).sort(scoreSort).limit(limit).lean();
 
-        // Resolve company names
-        const cIds = [...new Set(raw.filter((t: TopicDoc) => t.companyId).map((t: TopicDoc) => t.companyId!))];
-        const companies: CompanyDoc[] = cIds.length
-          ? await Company.find({ id: { $in: cIds } }).lean()
-          : [];
-        const companyMap: Record<string, string> = Object.fromEntries(
-          companies.map((c: CompanyDoc) => [c.id, c.name])
-        );
+        // Batch-resolve company + university names
+        const cIds = raw.filter((t: TopicDoc) => t.companyId).map((t: TopicDoc) => t.companyId!);
+        const uIds = raw.filter((t: TopicDoc) => t.universityId).map((t: TopicDoc) => t.universityId!);
 
-        // Resolve university names
-        const uIds = [...new Set(raw.filter((t: TopicDoc) => t.universityId).map((t: TopicDoc) => t.universityId!))];
-        const unis: UniversityDoc[] = uIds.length ? await University.find({ id: { $in: uIds } }).lean() : [];
-        const uniMap: Record<string, string> = Object.fromEntries(unis.map((u: UniversityDoc) => [u.id, u.name]));
+        const [companyMap, uniMap] = await Promise.all([
+          batchCompanyNames(cIds),
+          batchUniversityNames(uIds),
+        ]);
 
         result.topics = raw.map((t: TopicDoc) => ({
           id: t.id,
@@ -140,7 +161,8 @@ Returns real data sorted by relevance. Use entityTypes to narrow the search.`,
           ...(t.companyId && { companyName: companyMap[t.companyId] }),
           ...(t.universityId && { universityName: uniMap[t.universityId] }),
         }));
-      } catch {
+      } catch (err) {
+        console.warn('[SearchDB] Topic search failed', err);
         result.topics = [];
       }
     }
@@ -156,9 +178,7 @@ Returns real data sorted by relevance. Use entityTypes to narrow the search.`,
           .limit(limit)
           .lean();
 
-        const uIds = [...new Set(raw.map((s: SupervisorDoc) => s.universityId))];
-        const unis: UniversityDoc[] = await University.find({ id: { $in: uIds } }).lean();
-        const uniMap: Record<string, string> = Object.fromEntries(unis.map((u: UniversityDoc) => [u.id, u.name]));
+        const uniMap = await batchUniversityNames(raw.map((s: SupervisorDoc) => s.universityId));
 
         result.supervisors = raw.map((s: SupervisorDoc) => ({
           id: s.id,
@@ -171,7 +191,8 @@ Returns real data sorted by relevance. Use entityTypes to narrow the search.`,
           about: s.about,
           fieldIds: s.fieldIds,
         }));
-      } catch {
+      } catch (err) {
+        console.warn('[SearchDB] Supervisor search failed', err);
         result.supervisors = [];
       }
     }
@@ -181,7 +202,7 @@ Returns real data sorted by relevance. Use entityTypes to narrow the search.`,
       try {
         const raw: CompanyDoc[] = await Company.find(
           { $text: { $search: query } },
-          scoreProjection
+          scoreProjection,
         )
           .sort(scoreSort)
           .limit(limit)
@@ -195,41 +216,40 @@ Returns real data sorted by relevance. Use entityTypes to narrow the search.`,
           size: c.size,
           domains: c.domains,
         }));
-      } catch {
+      } catch (err) {
+        console.warn('[SearchDB] Company search failed', err);
         result.companies = [];
       }
     }
 
-    // ---- Experts ----
+    // ---- Experts (use $text, fallback to regex) ----
     if (types.includes('expert')) {
       try {
-        const filter: Record<string, unknown> = {};
+        const filter: Record<string, unknown> = { $text: { $search: query } };
         if (companyId) filter.companyId = companyId;
         if (fieldId) filter.fieldIds = fieldId;
 
         let raw: ExpertDoc[];
-        if (Object.keys(filter).length === 0) {
+        try {
+          raw = await Expert.find(filter, scoreProjection).sort(scoreSort).limit(limit).lean();
+        } catch (textErr) {
+          console.warn('[SearchDB] Expert $text search failed, falling back to regex', textErr);
+          const regexFilter: Record<string, unknown> = {};
+          if (companyId) regexFilter.companyId = companyId;
+          if (fieldId) regexFilter.fieldIds = fieldId;
           const regex = new RegExp(query.split(/\s+/).join('|'), 'i');
           raw = await Expert.find({
+            ...regexFilter,
             $or: [
               { about: regex },
               { title: regex },
               { firstName: regex },
               { lastName: regex },
             ],
-          })
-            .limit(limit)
-            .lean();
-        } else {
-          raw = await Expert.find(filter).limit(limit).lean();
+          }).limit(limit).lean();
         }
 
-        // Resolve company names
-        const expertCIds = [...new Set(raw.map((e: ExpertDoc) => e.companyId))];
-        const expertCompanies: CompanyDoc[] = await Company.find({ id: { $in: expertCIds } }).lean();
-        const expertCompanyMap: Record<string, string> = Object.fromEntries(
-          expertCompanies.map((c: CompanyDoc) => [c.id, c.name])
-        );
+        const expertCompanyMap = await batchCompanyNames(raw.map((e: ExpertDoc) => e.companyId));
 
         result.experts = raw.map((e: ExpertDoc) => ({
           id: e.id,
@@ -242,7 +262,8 @@ Returns real data sorted by relevance. Use entityTypes to narrow the search.`,
           about: e.about,
           fieldIds: e.fieldIds,
         }));
-      } catch {
+      } catch (err) {
+        console.warn('[SearchDB] Expert search failed', err);
         result.experts = [];
       }
     }
@@ -266,26 +287,69 @@ export const getEntityDetailsTool = tool({
     }
 
     if (entityType === 'topic') {
-      const topic = await Topic.findOne({ id: entityId }).lean() as TopicDoc | null;
+      const topic: TopicDoc | null = await Topic.findOne({ id: entityId }).lean() as TopicDoc | null;
       if (!topic) return null;
-      let companyName: string | null = null;
-      let universityName: string | null = null;
-      if (topic.companyId) {
-        const c = await Company.findOne({ id: topic.companyId }).lean() as CompanyDoc | null;
-        companyName = c?.name ?? null;
-      }
-      if (topic.universityId) {
-        const u = await University.findOne({ id: topic.universityId }).lean() as UniversityDoc | null;
-        universityName = u?.name ?? null;
-      }
-      return { ...topic, companyName, universityName };
+
+      // Collect IDs for batch resolution
+      const companyIds = topic.companyId ? [topic.companyId] : [];
+      const universityIds = topic.universityId ? [topic.universityId] : [];
+      const supervisorIds = [...new Set(topic.supervisorIds)];
+      const expertIds = [...new Set(topic.expertIds)];
+      const fieldIds = [...new Set(topic.fieldIds)];
+
+      const [companyMap, uniMap, supervisors, experts, fields] = await Promise.all([
+        batchCompanyNames(companyIds),
+        batchUniversityNames(universityIds),
+        supervisorIds.length
+          ? Supervisor.find({ id: { $in: supervisorIds } }).lean() as Promise<SupervisorDoc[]>
+          : Promise.resolve([] as SupervisorDoc[]),
+        expertIds.length
+          ? Expert.find({ id: { $in: expertIds } }).lean() as Promise<ExpertDoc[]>
+          : Promise.resolve([] as ExpertDoc[]),
+        fieldIds.length
+          ? Field.find({ id: { $in: fieldIds } }).lean() as Promise<FieldDoc[]>
+          : Promise.resolve([] as FieldDoc[]),
+      ]);
+
+      return {
+        ...topic,
+        companyName: topic.companyId ? companyMap[topic.companyId] ?? null : null,
+        universityName: topic.universityId ? uniMap[topic.universityId] ?? null : null,
+        supervisors: supervisors.map((s: SupervisorDoc) => ({
+          id: s.id,
+          firstName: s.firstName,
+          lastName: s.lastName,
+          title: s.title,
+        })),
+        experts: experts.map((e: ExpertDoc) => ({
+          id: e.id,
+          firstName: e.firstName,
+          lastName: e.lastName,
+          title: e.title,
+        })),
+        fields: fields.map((f: FieldDoc) => ({ id: f.id, name: f.name })),
+      };
     }
 
     if (entityType === 'supervisor') {
-      const s = await Supervisor.findOne({ id: entityId }).lean() as SupervisorDoc | null;
+      const s: SupervisorDoc | null = await Supervisor.findOne({ id: entityId }).lean() as SupervisorDoc | null;
       if (!s) return null;
-      const uni = await University.findOne({ id: s.universityId }).lean() as UniversityDoc | null;
-      return { ...s, universityName: uni?.name ?? s.universityId };
+
+      const [uniMap, topics] = await Promise.all([
+        batchUniversityNames([s.universityId]),
+        Topic.find({ supervisorIds: entityId }).lean() as Promise<TopicDoc[]>,
+      ]);
+
+      return {
+        ...s,
+        universityName: uniMap[s.universityId] ?? s.universityId,
+        topics: topics.map((t: TopicDoc) => ({
+          id: t.id,
+          title: t.title,
+          type: t.type,
+          degrees: t.degrees,
+        })),
+      };
     }
 
     if (entityType === 'company') {
@@ -293,10 +357,24 @@ export const getEntityDetailsTool = tool({
     }
 
     if (entityType === 'expert') {
-      const e = await Expert.findOne({ id: entityId }).lean() as ExpertDoc | null;
+      const e: ExpertDoc | null = await Expert.findOne({ id: entityId }).lean() as ExpertDoc | null;
       if (!e) return null;
-      const c = await Company.findOne({ id: e.companyId }).lean() as CompanyDoc | null;
-      return { ...e, companyName: c?.name ?? e.companyId };
+
+      const [companyMap, topics] = await Promise.all([
+        batchCompanyNames([e.companyId]),
+        Topic.find({ companyId: e.companyId }).lean() as Promise<TopicDoc[]>,
+      ]);
+
+      return {
+        ...e,
+        companyName: companyMap[e.companyId] ?? e.companyId,
+        relatedTopics: topics.map((t: TopicDoc) => ({
+          id: t.id,
+          title: t.title,
+          type: t.type,
+          degrees: t.degrees,
+        })),
+      };
     }
 
     return null;
@@ -322,7 +400,6 @@ export const getRoadmapStateTool = tool({
     studentId: z.string().describe('The student ID'),
   }),
   execute: async ({ studentId }) => {
-    const { Student } = await import('../models/Student.js');
     const student = await Student.findOne({ id: studentId }).lean();
     if (!student) return { error: 'Student not found' };
 

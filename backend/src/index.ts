@@ -8,6 +8,7 @@ import { tagsRouter } from './routes/tags.js';
 import { studentsRouter } from './routes/students.js';
 import { threadsRouter } from './routes/threads.js';
 import { seedRouter } from './routes/seed.js';
+import { projectsRouter } from './routes/projects.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -31,6 +32,7 @@ app.use('/api/thread-chat', threadChatRouter);
 app.use('/api/extract-tags', tagsRouter);
 app.use('/api/students', studentsRouter);
 app.use('/api/students/:studentId/threads', threadsRouter);
+app.use('/api/students/:studentId/projects', projectsRouter);
 app.use('/api/seed', seedRouter);
 
 // ---- Error handler ----

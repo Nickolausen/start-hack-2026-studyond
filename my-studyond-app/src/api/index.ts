@@ -12,6 +12,8 @@ import type {
   RoadmapStepId,
   AutoCommit,
   CommitConflict,
+  ThesisProject,
+  ProjectState,
 } from '@/types';
 
 const BASE = '/api';
@@ -215,4 +217,25 @@ export async function generateThreadQuestions(
     body: JSON.stringify({ suggestQuestions: true, threadContext, roadmapContext }),
   });
   return data.questions ?? [];
+}
+
+// ---- Projects ----
+
+export async function fetchProjects(studentId: string): Promise<ThesisProject[]> {
+  return apiFetch<ThesisProject[]>(`/students/${studentId}/projects`);
+}
+
+export async function fetchProject(studentId: string, projectId: string): Promise<ThesisProject> {
+  return apiFetch<ThesisProject>(`/students/${studentId}/projects/${projectId}`);
+}
+
+export async function updateProject(
+  studentId: string,
+  projectId: string,
+  data: { title?: string; description?: string; motivation?: string; state?: ProjectState }
+): Promise<ThesisProject> {
+  return apiFetch<ThesisProject>(`/students/${studentId}/projects/${projectId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
 }

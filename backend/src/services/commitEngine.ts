@@ -35,6 +35,7 @@ import { Expert } from '../models/Expert.js';
 import { Supervisor } from '../models/Supervisor.js';
 import { Topic } from '../models/Topic.js';
 import { Field } from '../models/Field.js';
+import { ThesisProject } from '../models/ThesisProject.js';
 
 // ---- Dependency Graph Definition ----
 
@@ -97,6 +98,8 @@ export interface CommitResult {
   autoCommitted: AutoCommit[];
   /** If success is false, conflicts that must be resolved */
   conflicts?: CommitConflict[];
+  /** Set when topic is committed and a ThesisProject is created/updated */
+  projectId?: string;
 }
 
 // ---- Resolve upstream parents from entity data ----
@@ -342,12 +345,23 @@ export async function executeCommit(
   if (!thread) throw new Error('Thread not found');
 
   const now = new Date();
+
+  // For the primary commit, resolve the best display name:
+  // - topic: use topicTitle (the thesis title), not the company name
+  // - supervisor: use "Title FirstName LastName"
+  // - expert: same
+  // - others: use card.name
+  let primaryEntityName = thread.card.name;
+  if (stepId === 'topic' && thread.card.topicTitle) {
+    primaryEntityName = thread.card.topicTitle;
+  }
+
   const allCommits = [
     ...plan.autoCommits,
     {
       stepId,
       entityId: thread.card.entityId,
-      entityName: thread.card.name,
+      entityName: primaryEntityName,
       threadId,
     },
   ];
@@ -382,10 +396,104 @@ export async function executeCommit(
 
   const updatedStudent = await Student.findOne({ id: studentId }).lean();
 
+  // ---- Auto-create ThesisProject when topic step is committed ----
+  // The project is the GOAL of the journey. It pulls authoritative data from the
+  // Topic DB record (companyId, supervisorIds, expertIds, fieldIds) and merges
+  // with whatever the student committed on their roadmap steps.
+  let projectId: string | undefined;
+
+  if (stepId === 'topic' && updatedStudent) {
+    const topicEntityId = thread.card.entityId;
+
+    // Fetch the ACTUAL topic record from DB — this is the source of truth
+    const topicRecord = await Topic.findOne({ id: topicEntityId }).lean();
+
+    // Also read what the roadmap committed (may have extra info from manual commits)
+    const stepsMap = new Map<string, RoadmapStepDoc>();
+    for (const s of updatedStudent.roadmapSteps) stepsMap.set(s.id, s);
+    const companyStep = stepsMap.get('company');
+    const supervisorStep = stepsMap.get('supervisor');
+    const expertStep = stepsMap.get('expert');
+    const fieldStep = stepsMap.get('field');
+
+    // Merge: topic DB record is primary, roadmap commits fill gaps
+    const topicCompanyId = topicRecord?.companyId ?? null;
+    const topicSupervisorIds = topicRecord?.supervisorIds ?? [];
+    const topicExpertIds = topicRecord?.expertIds ?? [];
+    const topicFieldIds = topicRecord?.fieldIds ?? [];
+    const topicUniversityId = topicRecord?.universityId ?? null;
+
+    // Company: prefer topic's own companyId, fallback to roadmap
+    const finalCompanyId = topicCompanyId
+      ?? (companyStep?.status === 'committed' ? companyStep.committedEntityId : null);
+
+    // Supervisors: union of topic's supervisorIds and roadmap-committed supervisor
+    const finalSupervisorIds = [...new Set([
+      ...topicSupervisorIds,
+      ...(supervisorStep?.status === 'committed' && supervisorStep.committedEntityId
+        ? [supervisorStep.committedEntityId] : []),
+    ])];
+
+    // Experts: union of topic's expertIds and roadmap-committed expert
+    const finalExpertIds = [...new Set([
+      ...topicExpertIds,
+      ...(expertStep?.status === 'committed' && expertStep.committedEntityId
+        ? [expertStep.committedEntityId] : []),
+    ])];
+
+    // Fields: union of topic's fieldIds and roadmap-committed field
+    const finalFieldIds = [...new Set([
+      ...topicFieldIds,
+      ...(fieldStep?.status === 'committed' && fieldStep.committedEntityId
+        ? [fieldStep.committedEntityId] : []),
+    ])];
+
+    // University: topic's university, or student's university
+    const finalUniversityId = topicUniversityId ?? updatedStudent.universityId;
+
+    // Title: topic title from card, or from DB record
+    const title = thread.card.topicTitle ?? topicRecord?.title ?? thread.card.name;
+    // Description: from DB topic record
+    const description = topicRecord?.description ?? null;
+
+    projectId = `project-${Date.now()}`;
+
+    await ThesisProject.findOneAndUpdate(
+      { studentId, topicId: topicEntityId },
+      {
+        $setOnInsert: { id: projectId },
+        $set: {
+          title,
+          description,
+          motivation: null,
+          state: 'proposed',
+          studentId,
+          topicId: topicEntityId,
+          companyId: finalCompanyId,
+          universityId: finalUniversityId,
+          supervisorIds: finalSupervisorIds,
+          expertIds: finalExpertIds,
+          fieldIds: finalFieldIds,
+        },
+      },
+      { upsert: true, returnDocument: 'after' }
+    );
+
+    // If the document already existed, use its persisted id
+    const existingProject = await ThesisProject.findOne({
+      studentId,
+      topicId: topicEntityId,
+    }).lean();
+    if (existingProject) {
+      projectId = existingProject.id;
+    }
+  }
+
   return {
     success: true,
     updatedSteps: updatedStudent?.roadmapSteps ?? [],
     autoCommitted: plan.autoCommits,
+    projectId,
   };
 }
 

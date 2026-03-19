@@ -26,4 +26,9 @@ const expertSchema = new Schema<ExpertDoc>({
   fieldIds: { type: [String], default: [] },
 });
 
+expertSchema.index(
+  { about: 'text', title: 'text', firstName: 'text', lastName: 'text' },
+  { weights: { title: 3, about: 2, firstName: 1, lastName: 1 } }
+);
+
 export const Expert = mongoose.model<ExpertDoc>('Expert', expertSchema);

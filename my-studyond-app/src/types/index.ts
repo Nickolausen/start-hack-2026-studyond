@@ -129,3 +129,24 @@ export interface ParsedAIResponse {
   text: string;
   matches: MatchCard[] | null;
 }
+
+// ---- Thesis Project ----
+
+export type ProjectState = 'proposed' | 'applied' | 'withdrawn' | 'rejected' | 'agreed' | 'in_progress' | 'canceled' | 'completed';
+
+export interface ThesisProject {
+  id: string;
+  title: string;
+  description: string | null;
+  motivation: string | null;
+  state: ProjectState;
+  studentId: string;
+  topicId: string | null;
+  companyId: string | null;
+  universityId: string | null;
+  supervisorIds: string[];
+  expertIds: string[];
+  fieldIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
