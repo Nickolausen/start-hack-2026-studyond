@@ -74,7 +74,7 @@ export function Navbar() {
 
       {/* Right: Nav items */}
       <div className="flex items-center gap-1">
-        <Link to="/">
+        {/* <Link to="/">
           <Button
             variant="ghost"
             size="icon"
@@ -103,7 +103,7 @@ export function Navbar() {
               </AvatarFallback>
             </Avatar>
           </Button>
-        </Link>
+        </Link> */}
 
         <div className="ml-1">
           <ThemeToggle />

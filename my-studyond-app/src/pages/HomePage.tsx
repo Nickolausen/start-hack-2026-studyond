@@ -30,7 +30,7 @@ export function HomePage() {
           <div className="flex items-start justify-between mb-6 md:mb-8">
             <div>
               <h1 className="ds-title-lg text-foreground">
-                Hi, {profile.firstName} 👋
+                Hi, {profile.firstName} <img src='https://media4.giphy.com/media/v1.Y2lkPTZjMDliOTUyYnk3NWxkbmRneGU5cTJkMm1iMTl5bXJ5OGtlcXVpczFqMjd6bHBveCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/6hKL8BI8rRNrMRFtAx/200w.gif' />
               </h1>
               <p className="ds-body text-muted-foreground mt-1">
                 {currentStep
