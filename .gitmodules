@@ -1,0 +1,3 @@
+[submodule "web-presentation/themes/reveal-hugo"]
+	path = web-presentation/themes/reveal-hugo
+	url = https://github.com/Nickolausen/reveal-hugo.git
