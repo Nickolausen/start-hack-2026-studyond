@@ -1,0 +1,24 @@
+<!doctype html><html><head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        html,body{height:100%;margin:0;background:#083b6f;overflow:hidden}
+        canvas{position:fixed;inset:0;width:100%;height:100%}
+    </style></head><body>
+<canvas id="c"></canvas>
+<script>
+    const c=document.getElementById('c'), x=c.getContext('2d'); let W,H,D=1,t=0;
+    function R(){D=window.devicePixelRatio||1; W=c.width=innerWidth*D; H=c.height=innerHeight*D; c.style.width=innerWidth+'px'; c.style.height=innerHeight+'px'; x.lineCap='round'; x.lineJoin='round'}
+    addEventListener('resize',R); R();
+    const agents=[...Array(200)].map(()=>({x:Math.random()*W,y:Math.random()*H,h:Math.random()*360}));
+    function noise(u,v){return Math.sin(u*0.002+t*0.6)+Math.cos(v*0.002-t*0.5)}
+    function step(){
+        t+=0.002; x.fillStyle='rgba(8,59,111,0.06)'; x.fillRect(0,0,W,H);
+        for(const a of agents){
+            const ang=noise(a.x,a.y)*1.8, sp=0.6*D;
+            const nx=a.x+Math.cos(ang)*sp, ny=a.y+Math.sin(ang)*sp;
+            x.strokeStyle=`hsla(${a.h},80%,60%,0.25)`; x.lineWidth=1.6*D; x.beginPath(); x.moveTo(a.x,a.y); x.lineTo(nx,ny); x.stroke();
+            a.x=(nx+W)%W; a.y=(ny+H)%H; a.h=(a.h+0.2)%360;
+        }
+        requestAnimationFrame(step)}
+    requestAnimationFrame(step);
+</script></body></html>

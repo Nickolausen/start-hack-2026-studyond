@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden
+        }
+        
+        .animated-background {
+            height: 100dvh;
+            width: 100dvw;
+            position: absolute;
+            z-index: -5;
+        }
+
+        .animated-background canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="animated-background" class="animated-background animated-background--blue" data-color="blue">
+        <canvas id="can0"></canvas>
+    </div>
+</body>
+
+</html>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const backgrounds = document.querySelectorAll('.animated-background');
+
+        backgrounds.forEach((container, index) => {
+            // Look for existing canvas, or create one if missing
+            let can = container.querySelector('canvas');
+            if (!can) {
+                can = document.createElement('canvas');
+                can.id = `can${index}`;
+                container.insertBefore(can, container.firstChild);
+            }
+
+            const colorToUse = container.getAttribute('data-color');
+            let colorRange, strokeColor;
+
+            if (colorToUse === 'red') {
+                colorRange = ['rgba(206, 23, 41, 0)', 'rgba(193, 23, 43, 0)'];
+                strokeColor = 'rgba(206, 23, 41, 1)';
+            } else {
+                colorRange = ['rgba(245, 245, 245, alp)', 'rgba(229, 229, 229, alp)'];
+                strokeColor = 'rgba(245, 245, 245, 0.5)';
+            }
+
+            const ctx = can.getContext('2d');
+            let w, h, hexs = [];
+
+            const opts = {
+                side: 16,
+                picksParTick: 8,
+                baseTime: 200,
+                addedTime: 5,
+                colors: colorRange,
+                strokeColor: strokeColor,
+                hueSpeed: 0.1,
+                repaintAlpha: 1
+            };
+
+            // Math Constants
+            const difX = Math.sqrt(3) * opts.side / 2;
+            const difY = opts.side * 3 / 2;
+            const rad = Math.PI / 6;
+            const cos = Math.cos(rad) * opts.side;
+            const sin = Math.sin(rad) * opts.side;
+
+            function Hex(x, y) {
+                this.x = x;
+                this.y = y;
+                this.picked = false;
+                this.time = 0;
+                this.targetTime = 0;
+                // Pre-calculate vertices for performance
+                this.xs = [this.x + cos, this.x, this.x - cos, this.x - cos, this.x, this.x + cos];
+                this.ys = [this.y - sin, this.y - opts.side, this.y - sin, this.y + sin, this.y + opts.side, this.y + sin];
+            }
+
+            Hex.prototype.pick = function () {
+                this.color = opts.colors[(Math.random() * opts.colors.length) | 0];
+                this.picked = true;
+                this.time = this.time || 0;
+                this.targetTime = this.targetTime || (opts.baseTime + opts.addedTime * Math.random()) | 0;
+            };
+
+            Hex.prototype.step = function () {
+                const prop = this.time / this.targetTime;
+
+                ctx.beginPath();
+                ctx.moveTo(this.xs[0], this.ys[0]);
+                for (let i = 1; i < this.xs.length; ++i) ctx.lineTo(this.xs[i], this.ys[i]);
+                ctx.closePath();
+
+                if (this.picked) {
+                    this.time++;
+                    if (this.time >= this.targetTime) {
+                        this.time = 0;
+                        this.targetTime = 0;
+                        this.picked = false;
+                    }
+                    ctx.fillStyle = this.color.replace('alp', Math.sin(prop * Math.PI));
+                    ctx.fill();
+                } else {
+                    ctx.strokeStyle = opts.strokeColor;
+                    ctx.stroke();
+                }
+            };
+
+            function resize() {
+                const rect = container.getBoundingClientRect();
+                w = can.width = rect.width;
+                h = can.height = rect.height;
+
+                hexs = [];
+                for (let x = 0; x < w + difX; x += difX * 2) {
+                    let i = 0;
+                    for (let y = 0; y < h + difY; y += difY) {
+                        i++;
+                        hexs.push(new Hex(x + difX * (i % 2), y));
+                    }
+                }
+            }
+
+            function loop() {
+                window.requestAnimationFrame(loop);
+
+                const backColor = (colorToUse === 'red')
+                    ? 'rgba(232, 28, 47, 0.9)'
+                    : 'rgba(225, 225, 225, 0.5)';
+
+                ctx.fillStyle = backColor;
+                ctx.fillRect(0, 0, w, h);
+
+                for (let i = 0; i < opts.picksParTick; ++i) {
+                    if (hexs.length) hexs[(Math.random() * hexs.length) | 0].pick();
+                }
+
+                hexs.forEach(hex => hex.step());
+            }
+
+            window.addEventListener('resize', resize);
+            resize();
+            loop();
+        });
+    });
+</script>
