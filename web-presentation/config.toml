@@ -1,10 +1,10 @@
 languageCode = "en-us"
-title = "A Hugo theme for creating Reveal.js presentations"
+title = "Starthack 2026 Studyond Case - ThEASYs"
 disableKinds = ["sitemap", "RSS"]
 theme = "reveal-hugo"
 publishDir = "build"
 # TODO: Insert repo name below here!
-baseURL = "https://nickolausen.github.io/web-presentation-template/"
+baseURL = "https://morpheusers.github.io/start-hack-2026-studyond/"
 # Example: baseURL = "https://<github pages base url>/<repo name>/"
 
 # This forces Hugo to make all links relative to the current page
@@ -68,5 +68,3 @@ useMaxWidth = true
 # [params.reveal_hugo.mermaid.gitGraph]
 # mainBranchName = 'master'
 # rotateCommitLabel = true
-
-
